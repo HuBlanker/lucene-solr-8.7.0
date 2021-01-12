@@ -54,7 +54,7 @@ public final class DirectMonotonicWriter {
       throw new IllegalArgumentException("numValues can't be negative, got " + numValues);
     }
 
-    //　总共有多少chunk. 来算有多少block.
+    //　总共有多少chunk. 来算有多少block. 这里只是做了一个校验，实际不一定在这里
     final long numBlocks = numValues == 0 ? 0 : ((numValues - 1) >>> blockShift) + 1;
     if (numBlocks > ArrayUtil.MAX_ARRAY_LENGTH) {
       throw new IllegalArgumentException("blockShift is too low for the provided number of values: blockShift=" + blockShift +
