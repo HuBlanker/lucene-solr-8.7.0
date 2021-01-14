@@ -115,6 +115,7 @@ public final class CompressingStoredFieldsWriter extends StoredFieldsWriter {
 
     boolean success = false;
     try {
+      // segmentinfo id 长度为16 bytes
       metaStream = directory.createOutput(IndexFileNames.segmentFileName(segment, segmentSuffix, META_EXTENSION), context);
       CodecUtil.writeIndexHeader(metaStream, INDEX_CODEC_NAME + "Meta", VERSION_CURRENT, si.getId(), segmentSuffix);
       assert CodecUtil.indexHeaderLength(INDEX_CODEC_NAME + "Meta", segmentSuffix) == metaStream.getFilePointer();
@@ -125,6 +126,9 @@ public final class CompressingStoredFieldsWriter extends StoredFieldsWriter {
 
       indexWriter = new FieldsIndexWriter(directory, segment, segmentSuffix, INDEX_EXTENSION, INDEX_CODEC_NAME, si.getId(), blockShift, context);
 
+      // 614400. 见org.apache.lucene.codecs.lucene87.Lucene87StoredFieldsFormat.BEST_SPEED_BLOCK_LENGTH.
+      // 每一块doc组成的块，600kb大小，一次写入，或者说很小，但是数量超过了每个chunk最大的数量
+      // 变长存储
       metaStream.writeVInt(chunkSize);
       metaStream.writeVInt(PackedInts.VERSION_CURRENT);
 

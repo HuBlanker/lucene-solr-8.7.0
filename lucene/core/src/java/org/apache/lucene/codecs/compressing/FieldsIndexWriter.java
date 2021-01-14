@@ -96,6 +96,7 @@ public final class FieldsIndexWriter implements Closeable {
     totalChunks++;
   }
 
+  // flush 时候调用，这次在看metaOut都写了啥
   void finish(int numDocs, long maxPointer, IndexOutput metaOut) throws IOException {
     if (numDocs != totalDocs) {
       throw new IllegalStateException("Expected " + numDocs + " docs, but got " + totalDocs);

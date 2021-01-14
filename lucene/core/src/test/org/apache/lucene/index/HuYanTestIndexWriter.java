@@ -26,15 +26,16 @@ public class HuYanTestIndexWriter extends LuceneTestCase {
     // 索引写入的配置
     Analyzer analyzer = new StandardAnalyzer();// 分词器
     IndexWriterConfig conf = new IndexWriterConfig(analyzer);
+    conf.setUseCompoundFile(false);
 
     // 构建用于操作索引的类
     IndexWriter indexWriter = new IndexWriter(d, conf);
 
     // add one document & close writer
-    for (int i = 0; i < 3000; i++) {
-      addDoc(indexWriter, i);
-
-    }
+//    for (int i = 0; i < 3000; i++) {
+    addDoc(indexWriter, 0);
+//
+//    }
     indexWriter.commit();
     indexWriter.close();
     d.close();
