@@ -111,7 +111,8 @@ public final class FieldsIndexWriter implements Closeable {
       metaOut.writeInt(numDocs);
       metaOut.writeInt(blockShift);
       metaOut.writeInt(totalChunks + 1);
-      metaOut.writeLong(dataOut.getFilePointer());
+      long filePointer = dataOut.getFilePointer();
+      metaOut.writeLong(filePointer);
 
       try (ChecksumIndexInput docsIn = dir.openChecksumInput(docsOut.getName(), IOContext.READONCE)) {
         CodecUtil.checkHeader(docsIn, codecName + "Docs", VERSION_CURRENT, VERSION_CURRENT);
@@ -120,6 +121,7 @@ public final class FieldsIndexWriter implements Closeable {
           final DirectMonotonicWriter docs = DirectMonotonicWriter.getInstance(metaOut, dataOut, totalChunks + 1, blockShift);
           long doc = 0;
           docs.add(doc);
+          // 注意，这里是每一chunk, 而不是per document
           for (int i = 0; i < totalChunks; ++i) {
             doc += docsIn.readVInt();
             docs.add(doc);
@@ -137,7 +139,8 @@ public final class FieldsIndexWriter implements Closeable {
       dir.deleteFile(docsOut.getName());
       docsOut = null;
 
-      metaOut.writeLong(dataOut.getFilePointer());
+      long filePointer1 = dataOut.getFilePointer();
+      metaOut.writeLong(filePointer1);
       try (ChecksumIndexInput filePointersIn = dir.openChecksumInput(filePointersOut.getName(), IOContext.READONCE)) {
         CodecUtil.checkHeader(filePointersIn, codecName + "FilePointers", VERSION_CURRENT, VERSION_CURRENT);
         Throwable priorE = null;
@@ -162,7 +165,8 @@ public final class FieldsIndexWriter implements Closeable {
       dir.deleteFile(filePointersOut.getName());
       filePointersOut = null;
 
-      metaOut.writeLong(dataOut.getFilePointer());
+      long filePointer2 = dataOut.getFilePointer();
+      metaOut.writeLong(filePointer2);
       metaOut.writeLong(maxPointer);
 
       CodecUtil.writeFooter(dataOut);

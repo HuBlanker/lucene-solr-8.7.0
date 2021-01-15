@@ -28,21 +28,53 @@ import org.apache.lucene.util.ArrayUtil;
  * data into blocks and then for each block, computes the average slope, the
  * minimum value and only encode the delta from the expected value using a
  * {@link DirectWriter}.
- * 
+ *
+ * average slope 还真是平均斜率
+ *
+ * 写入单调递增的整数序列
+ * 这个类把数据分成块，　然后对每个块计算平均斜率，最小值，然后编码期望值使用 "偏移量" 编码
+ * 使用DirectWriter.
+ *
+ * <br/>
+ * <br/>
+ *
+ *
+ * <B>单调递增的数组写入，对单调递增的数据进行了增量编码，比如[100,101,102,103], 可以编码成[100,1,1,1] 每一个数是前一个数的增量。
+ * 这样有个好处，就是数字全部变小了，</B>
+ *
+ * <br/>
+ * <br/>
+ *
+ * <B> 配合 DirectWriter　的数字越小压缩率越高，可以有效的压缩存储单调递增数组,
+ * 比如很合适的就是文件偏移量，因为文件一直写，一直增多，符合单调递增。</B>
  * @see DirectMonotonicReader
  * @lucene.internal 
  */
 public final class DirectMonotonicWriter {
 
+  // 一块有多少个int,　这里是 2的shift次方个吗？
   public static final int MIN_BLOCK_SHIFT = 2;
   public static final int MAX_BLOCK_SHIFT = 22;
 
+  // 这个类，　其实不知道是为了谁写
+  // 但是仍然不妨碍一个记录元数据，一个记录真正的数据，
+  // 写field信息可以用，其他也可以
   final IndexOutput meta;
   final IndexOutput data;
+
+  // 总数, 不区分什么chunk,block等等，对于这个类来说，就是你想要我写多少个。
   final long numValues;
+
+
+  // data文件初始化的时候已经被写了多少
   final long baseDataPointer;
+
+
+  // 内部缓冲区，分块用的这个
   final long[] buffer;
+  // 当前已经buffer了多少个？
   int bufferSize;
+  // 总数计数，　bufferSize会被清除的
   long count;
   boolean finished;
 
@@ -54,7 +86,9 @@ public final class DirectMonotonicWriter {
       throw new IllegalArgumentException("numValues can't be negative, got " + numValues);
     }
 
-    //　总共有多少chunk. 来算有多少block. 这里只是做了一个校验，实际不一定在这里
+
+    // 根据总数，以及每块的数据，来算总共需要的块的数量。　算法约等于，总数 / (2 ^ blockShift);
+    // 这里只是校验一下这两个数字的合法性，实际限制在
     final long numBlocks = numValues == 0 ? 0 : ((numValues - 1) >>> blockShift) + 1;
     if (numBlocks > ArrayUtil.MAX_ARRAY_LENGTH) {
       throw new IllegalArgumentException("blockShift is too low for the provided number of values: blockShift=" + blockShift +
@@ -63,26 +97,37 @@ public final class DirectMonotonicWriter {
     this.meta = metaOut;
     this.data = dataOut;
     this.numValues = numValues;
+    // blockSize算到了，　然后缓冲区的大小就是blockSize或者极限情况下很少，就是numValues.
     final int blockSize = 1 << blockShift;
     this.buffer = new long[(int) Math.min(numValues, blockSize)];
     this.bufferSize = 0;
     this.baseDataPointer = dataOut.getFilePointer();
   }
 
+  // 一个块满了，或者最终调用finish了，就写一次
   private void flush() throws IOException {
     assert bufferSize != 0;
 
+    // 斜率算法, 最大减去最小除以个数，常见算法
     final float avgInc = (float) ((double) (buffer[bufferSize-1] - buffer[0]) / Math.max(1, bufferSize - 1));
+
+    // 根据斜率，算出当前位置上的数字，比按照斜率算出来的数字，多了多少或者小了多少，这就是增量编码
+    // 当前存了个３，预期是500,那就存储-470.
+    // 有啥意义么？　能把大数字变成小数字？节省点空间？
     for (int i = 0; i < bufferSize; ++i) {
       final long expected = (long) (avgInc * (long) i);
       buffer[i] -= expected;
     }
 
+    // 最小的值，不知道咋用
+    // 但是存的不是真实值，而是偏移量
     long min = buffer[0];
     for (int i = 1; i < bufferSize; ++i) {
       min = Math.min(buffer[i], min);
     }
 
+    // 每个位置上存储的，不是偏移量了，而是偏移量与最小的值的偏移量
+    // 然后算个最大偏移量
     long maxDelta = 0;
     for (int i = 0; i < bufferSize; ++i) {
       buffer[i] -= min;
@@ -92,20 +137,28 @@ public final class DirectMonotonicWriter {
       maxDelta |= buffer[i];
     }
 
+    // 元数据里面开始写, 最小值，平均斜率，data文件从开始到现在写了多少，
     meta.writeLong(min);
     meta.writeInt(Float.floatToIntBits(avgInc));
     meta.writeLong(data.getFilePointer() - baseDataPointer);
     if (maxDelta == 0) {
+      // 最大偏移量为，那就写个0
       meta.writeByte((byte) 0);
     } else {
+      // 最大需要多少位
       final int bitsRequired = DirectWriter.unsignedBitsRequired(maxDelta);
+      // 把缓冲的数据实际的写到data文件去
       DirectWriter writer = DirectWriter.getInstance(data, bufferSize, bitsRequired);
       for (int i = 0; i < bufferSize; ++i) {
         writer.add(buffer[i]);
       }
       writer.finish();
+
+      // 写一下算出来的最大需要多少位
       meta.writeByte((byte) bitsRequired);
     }
+
+    // 缓冲的数据归零，这样就能一直用内存里的buffer了
     bufferSize = 0;
   }
 
@@ -113,27 +166,39 @@ public final class DirectMonotonicWriter {
 
   /** Write a new value. Note that data might not make it to storage until
    * {@link #finish()} is called.
-   *  @throws IllegalArgumentException if values don't come in order */
+   *  @throws IllegalArgumentException if values don't come in order
+   *写一个新的值，
+   * 但是不一定立即存储，可能在finish的时候才存储
+   * 如果传入的值不是递增的，就报错
+   *  */
   public void add(long v) throws IOException {
     if (v < previous) {
       throw new IllegalArgumentException("Values do not come in order: " + previous + ", " + v);
     }
+    // 内部缓冲区满，意味着，分块的一块满了, 缓冲区是之前根据分块大小算好的
     if (bufferSize == buffer.length) {
       flush();
     }
+
+    // 缓冲区没满，先放到内存buffer里面
     buffer[bufferSize++] = v;
     previous = v;
     count++;
   }
 
-  /** This must be called exactly once after all values have been {@link #add(long) added}. */
+  /** This must be called exactly once after all values have been {@link #add(long) added}.
+   * 所有数字都被调用过all之后，
+   * 要调用且只能调用一次finish.
+   * */
   public void finish() throws IOException {
     if (count != numValues) {
       throw new IllegalStateException("Wrong number of values added, expected: " + numValues + ", got: " + count);
     }
+    // 保证只能调用一次
     if (finished) {
       throw new IllegalStateException("#finish has been called already");
     }
+    // 调用finish的时候，有缓冲就直接写，反正也只能调用一次
     if (bufferSize > 0) {
       flush();
     }
@@ -142,7 +207,11 @@ public final class DirectMonotonicWriter {
 
   /** Returns an instance suitable for encoding {@code numValues} into monotonic
    *  blocks of 2<sup>{@code blockShift}</sup> values. Metadata will be written
-   *  to {@code metaOut} and actual data to {@code dataOut}. */
+   *  to {@code metaOut} and actual data to {@code dataOut}.
+   *
+   *  返回一个适合编码　numValues 个数字　到 (2 ^ blockShift) 大小的递增块的实例
+   *  元数据写到meta, 实际的数据写到dataOut.
+   *  */
   public static DirectMonotonicWriter getInstance(IndexOutput metaOut, IndexOutput dataOut, long numValues, int blockShift) {
     return new DirectMonotonicWriter(metaOut, dataOut, numValues, blockShift);
   }
