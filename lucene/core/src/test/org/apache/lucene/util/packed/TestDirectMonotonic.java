@@ -18,12 +18,14 @@ package org.apache.lucene.util.packed;
 
 
 import java.io.IOException;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 
 import org.apache.lucene.store.Directory;
+import org.apache.lucene.store.FSDirectory;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
@@ -31,8 +33,29 @@ import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.LongValues;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.TestUtil;
+import org.junit.Ignore;
 
 public class TestDirectMonotonic extends LuceneTestCase {
+
+  // 测试下细节
+  @Ignore
+  public void testHuyan() throws Exception {
+    Directory dir = FSDirectory.open(Paths.get("/tmp/lucene-test/"));
+    dir.deleteFile("direct_mon_writer_test.meta");
+    dir.deleteFile("direct_mon_writer_test.data");
+    IndexOutput metaOut = dir.createOutput("direct_mon_writer_test.meta", IOContext.DEFAULT);
+    IndexOutput dataOut = dir.createOutput("direct_mon_writer_test.data", IOContext.DEFAULT);
+
+    DirectMonotonicWriter writer = DirectMonotonicWriter.getInstance(metaOut, dataOut, 3, 8);
+    writer.add(100);
+    writer.add(101);
+    writer.add(108);
+    writer.finish();
+    metaOut.close();
+    dataOut.close();
+    dir.close();
+
+  }
 
   public void testValidation() {
     IllegalArgumentException e = expectThrows(IllegalArgumentException.class,

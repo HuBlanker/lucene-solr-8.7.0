@@ -87,8 +87,11 @@ public final class CodecUtil {
     if (bytes.length != codec.length() || bytes.length >= 128) {
       throw new IllegalArgumentException("codec must be simple ASCII, less than 128 characters in length [got " + codec + "]");
     }
+    // 4byte
     out.writeInt(CODEC_MAGIC);
+    // codec.length vint + codec
     out.writeString(codec);
+    // 4 byte
     out.writeInt(version);
   }
   

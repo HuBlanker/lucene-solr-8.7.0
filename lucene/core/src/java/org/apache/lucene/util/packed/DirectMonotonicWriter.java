@@ -17,7 +17,6 @@
 package org.apache.lucene.util.packed;
 
 
-
 import java.io.IOException;
 
 import org.apache.lucene.store.IndexOutput;
@@ -28,27 +27,28 @@ import org.apache.lucene.util.ArrayUtil;
  * data into blocks and then for each block, computes the average slope, the
  * minimum value and only encode the delta from the expected value using a
  * {@link DirectWriter}.
- *
+ * <p>
  * average slope 还真是平均斜率
- *
+ * <p>
  * 写入单调递增的整数序列
  * 这个类把数据分成块，　然后对每个块计算平均斜率，最小值，然后编码期望值使用 "偏移量" 编码
  * 使用DirectWriter.
- *
+ * <p>
  * <br/>
  * <br/>
  *
  *
  * <B>单调递增的数组写入，对单调递增的数据进行了增量编码，比如[100,101,102,103], 可以编码成[100,1,1,1] 每一个数是前一个数的增量。
  * 这样有个好处，就是数字全部变小了，</B>
- *
+ * <p>
  * <br/>
  * <br/>
  *
  * <B> 配合 DirectWriter　的数字越小压缩率越高，可以有效的压缩存储单调递增数组,
  * 比如很合适的就是文件偏移量，因为文件一直写，一直增多，符合单调递增。</B>
+ *
+ * @lucene.internal
  * @see DirectMonotonicReader
- * @lucene.internal 
  */
 public final class DirectMonotonicWriter {
 
@@ -104,22 +104,39 @@ public final class DirectMonotonicWriter {
     this.baseDataPointer = dataOut.getFilePointer();
   }
 
-  // 一个块满了，或者最终调用finish了，就写一次
+
+  /**
+   * // 一个块满了，或者最终调用finish了，就写一次
+   * <br/>
+   * <br/>
+   * <b>计算方法终于搞明白了，存储一个单调递增数组，要存储斜率，最小值，以及delta，再加上index就可以算出来</b>
+   * 举例 [100,101,108] 经过计算之后存储的[3,0,3], 斜率4.0. 最小值97.
+   * 开始计算：
+   * 1. 100 = 97 + 3 + 0 * 4.0
+   * 2. 101 = 97 + 0 + 1 * 4.0
+   * 3. 108 = 97 + 3 + 2 * 4.0
+   * 完美
+   * <br/>
+   * <br/>
+   * 一个block，这么搞一下
+   *
+   * @throws IOException
+   */
   private void flush() throws IOException {
     assert bufferSize != 0;
 
     // 斜率算法, 最大减去最小除以个数，常见算法
-    final float avgInc = (float) ((double) (buffer[bufferSize-1] - buffer[0]) / Math.max(1, bufferSize - 1));
+    final float avgInc = (float) ((double) (buffer[bufferSize - 1] - buffer[0]) / Math.max(1, bufferSize - 1));
 
     // 根据斜率，算出当前位置上的数字，比按照斜率算出来的数字，多了多少或者小了多少，这就是增量编码
-    // 当前存了个３，预期是500,那就存储-470.
+    // 当前存了个３，预期是500,那就存储-497.
     // 有啥意义么？　能把大数字变成小数字？节省点空间？
+    // 这里会把单调递增的数字，算一条执行出来，首尾连接点. 然后每个数字对着线上对应点的偏移距离，画个图会好说很多，一个一元一次方程么？
     for (int i = 0; i < bufferSize; ++i) {
       final long expected = (long) (avgInc * (long) i);
       buffer[i] -= expected;
     }
 
-    // 最小的值，不知道咋用
     // 但是存的不是真实值，而是偏移量
     long min = buffer[0];
     for (int i = 1; i < bufferSize; ++i) {
@@ -141,6 +158,8 @@ public final class DirectMonotonicWriter {
     meta.writeLong(min);
     meta.writeInt(Float.floatToIntBits(avgInc));
     meta.writeLong(data.getFilePointer() - baseDataPointer);
+    // 是不是意味着全是0, 也就是绝对的单调递增,等差数列的意思？
+    // 如果是等差数列，就不在data里面写了，直接在meta里面记一下最小值就完事了，之后等差就好了
     if (maxDelta == 0) {
       // 最大偏移量为，那就写个0
       meta.writeByte((byte) 0);
@@ -164,13 +183,15 @@ public final class DirectMonotonicWriter {
 
   long previous = Long.MIN_VALUE;
 
-  /** Write a new value. Note that data might not make it to storage until
+  /**
+   * Write a new value. Note that data might not make it to storage until
    * {@link #finish()} is called.
-   *  @throws IllegalArgumentException if values don't come in order
-   *写一个新的值，
-   * 但是不一定立即存储，可能在finish的时候才存储
-   * 如果传入的值不是递增的，就报错
-   *  */
+   *
+   * @throws IllegalArgumentException if values don't come in order
+   *                                  写一个新的值，
+   *                                  但是不一定立即存储，可能在finish的时候才存储
+   *                                  如果传入的值不是递增的，就报错
+   */
   public void add(long v) throws IOException {
     if (v < previous) {
       throw new IllegalArgumentException("Values do not come in order: " + previous + ", " + v);
@@ -186,10 +207,11 @@ public final class DirectMonotonicWriter {
     count++;
   }
 
-  /** This must be called exactly once after all values have been {@link #add(long) added}.
+  /**
+   * This must be called exactly once after all values have been {@link #add(long) added}.
    * 所有数字都被调用过all之后，
    * 要调用且只能调用一次finish.
-   * */
+   */
   public void finish() throws IOException {
     if (count != numValues) {
       throw new IllegalStateException("Wrong number of values added, expected: " + numValues + ", got: " + count);
@@ -205,13 +227,14 @@ public final class DirectMonotonicWriter {
     finished = true;
   }
 
-  /** Returns an instance suitable for encoding {@code numValues} into monotonic
-   *  blocks of 2<sup>{@code blockShift}</sup> values. Metadata will be written
-   *  to {@code metaOut} and actual data to {@code dataOut}.
-   *
-   *  返回一个适合编码　numValues 个数字　到 (2 ^ blockShift) 大小的递增块的实例
-   *  元数据写到meta, 实际的数据写到dataOut.
-   *  */
+  /**
+   * Returns an instance suitable for encoding {@code numValues} into monotonic
+   * blocks of 2<sup>{@code blockShift}</sup> values. Metadata will be written
+   * to {@code metaOut} and actual data to {@code dataOut}.
+   * <p>
+   * 返回一个适合编码　numValues 个数字　到 (2 ^ blockShift) 大小的递增块的实例
+   * 元数据写到meta, 实际的数据写到dataOut.
+   */
   public static DirectMonotonicWriter getInstance(IndexOutput metaOut, IndexOutput dataOut, long numValues, int blockShift) {
     return new DirectMonotonicWriter(metaOut, dataOut, numValues, blockShift);
   }

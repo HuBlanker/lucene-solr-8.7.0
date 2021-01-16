@@ -34,6 +34,7 @@ public class HuYanTestIndexWriter extends LuceneTestCase {
     // add one document & close writer
 //    for (int i = 0; i < 3000; i++) {
     addDoc(indexWriter, 0);
+    addDoc(indexWriter, 1);
 //
 //    }
     indexWriter.commit();

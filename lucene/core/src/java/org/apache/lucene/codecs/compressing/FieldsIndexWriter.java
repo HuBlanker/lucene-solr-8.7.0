@@ -42,6 +42,7 @@ import org.apache.lucene.util.packed.DirectMonotonicWriter;
  * the {@link DirectMonotonicReader} that records doc IDS, and the returned
  * index is used to look up the start pointer in the
  * {@link DirectMonotonicReader} that records start pointers.
+ *
  * @lucene.internal
  */
 public final class FieldsIndexWriter implements Closeable {
@@ -64,7 +65,7 @@ public final class FieldsIndexWriter implements Closeable {
   private long previousFP;
 
   FieldsIndexWriter(Directory dir, String name, String suffix, String extension,
-      String codecName, byte[] id, int blockShift, IOContext ioContext) throws IOException {
+                    String codecName, byte[] id, int blockShift, IOContext ioContext) throws IOException {
     this.dir = dir;
     this.name = name;
     this.suffix = suffix;
@@ -97,6 +98,13 @@ public final class FieldsIndexWriter implements Closeable {
   }
 
   // flush 时候调用，这次在看metaOut都写了啥
+
+  /**
+   * 在这里生成的fdx文件，从两个tmp文件里面找到每个chunk的doc数量，fdt文件中存储的字节数，
+   * 这两个内容，写到meta文件和fdx文件中，配合起来存储的
+   * <p>
+   * 这个类本身就是为了fdx文件搞的，就是为了写fdt的索引，写得少很正常
+   */
   void finish(int numDocs, long maxPointer, IndexOutput metaOut) throws IOException {
     if (numDocs != totalDocs) {
       throw new IllegalStateException("Expected " + numDocs + " docs, but got " + totalDocs);
@@ -105,12 +113,16 @@ public final class FieldsIndexWriter implements Closeable {
     CodecUtil.writeFooter(filePointersOut);
     IOUtils.close(docsOut, filePointersOut);
 
+    // dataOut　是fdx文件，是用来对fdt文件做索引的文件，所以fdt文件写入内容，我这里记录每个chunk的doc数量，占用字节数即可
+    // 所以这里只能调用一次么，无论是多少个多大的field，都只能调用一次这里么
     try (IndexOutput dataOut = dir.createOutput(IndexFileNames.segmentFileName(name, suffix, extension), ioContext)) {
+      // 这个header，48个字节.
       CodecUtil.writeIndexHeader(dataOut, codecName + "Idx", VERSION_CURRENT, id, suffix);
 
       metaOut.writeInt(numDocs);
       metaOut.writeInt(blockShift);
       metaOut.writeInt(totalChunks + 1);
+      // 这个filePointer,此时只写了一个header的长度，48
       long filePointer = dataOut.getFilePointer();
       metaOut.writeLong(filePointer);
 
@@ -118,11 +130,13 @@ public final class FieldsIndexWriter implements Closeable {
         CodecUtil.checkHeader(docsIn, codecName + "Docs", VERSION_CURRENT, VERSION_CURRENT);
         Throwable priorE = null;
         try {
+          // 这里做的配合是，　meta里面存了min/斜率等，真实的数组偏移量在dataOut里面存储
           final DirectMonotonicWriter docs = DirectMonotonicWriter.getInstance(metaOut, dataOut, totalChunks + 1, blockShift);
           long doc = 0;
           docs.add(doc);
           // 注意，这里是每一chunk, 而不是per document
           for (int i = 0; i < totalChunks; ++i) {
+            // 每个chunk的doc数量
             doc += docsIn.readVInt();
             docs.add(doc);
           }
@@ -145,8 +159,10 @@ public final class FieldsIndexWriter implements Closeable {
         CodecUtil.checkHeader(filePointersIn, codecName + "FilePointers", VERSION_CURRENT, VERSION_CURRENT);
         Throwable priorE = null;
         try {
+          // 其实由于我测试的时候只有一两个doc，肯定在一个chunk,所以dataOut里面都没写入啥东西
           final DirectMonotonicWriter filePointers = DirectMonotonicWriter.getInstance(metaOut, dataOut, totalChunks + 1, blockShift);
           long fp = 0;
+          // 这里存储的是每一个chunk的实际数据的字节长度
           for (int i = 0; i < totalChunks; ++i) {
             fp += filePointersIn.readVLong();
             filePointers.add(fp);
@@ -165,6 +181,7 @@ public final class FieldsIndexWriter implements Closeable {
       dir.deleteFile(filePointersOut.getName());
       filePointersOut = null;
 
+      // meta里面再搞个索引
       long filePointer2 = dataOut.getFilePointer();
       metaOut.writeLong(filePointer2);
       metaOut.writeLong(maxPointer);

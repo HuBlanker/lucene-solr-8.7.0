@@ -154,6 +154,7 @@ public final class CompressingStoredFieldsWriter extends StoredFieldsWriter {
 
   private int numStoredFieldsInDoc;
 
+  // 开始一个文档的存储
   @Override
   public void startDocument() throws IOException {
   }
@@ -219,12 +220,15 @@ public final class CompressingStoredFieldsWriter extends StoredFieldsWriter {
     saveInts(lengths, numBufferedDocs, fieldsStream);
   }
 
+  // 这里判断是否是一个chunk,是否需要进行一次flush
   private boolean triggerFlush() {
     return bufferedDocs.size() >= chunkSize || // chunks of at least chunkSize bytes
         numBufferedDocs >= maxDocsPerChunk;
   }
 
+  // 每个chunk 进行一次flush
   private void flush() throws IOException {
+    // 向tmp文件里面写入了 1. chunk中doc的数量 2. chunk中所有field占用的字节数
     indexWriter.writeIndex(numBufferedDocs, fieldsStream.getFilePointer());
 
     // transform end offsets into lengths
@@ -234,6 +238,7 @@ public final class CompressingStoredFieldsWriter extends StoredFieldsWriter {
       assert lengths[i] >= 0;
     }
     final boolean sliced = bufferedDocs.size() >= 2 * chunkSize;
+    // 称之为chunk_header?
     writeHeader(docBase, numBufferedDocs, numStoredFields, lengths, sliced);
 
     // compress stored fields to fieldsStream
@@ -262,6 +267,7 @@ public final class CompressingStoredFieldsWriter extends StoredFieldsWriter {
   public void writeField(FieldInfo info, IndexableField field)
       throws IOException {
 
+    // 计数+1
     ++numStoredFieldsInDoc;
 
     int bits = 0;
