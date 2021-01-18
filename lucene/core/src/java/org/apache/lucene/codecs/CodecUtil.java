@@ -393,6 +393,7 @@ public final class CodecUtil {
   public static void writeFooter(IndexOutput out) throws IOException {
     out.writeInt(FOOTER_MAGIC);
     out.writeInt(0);
+    // CRC, 数据校验方法，用来校验这个文件的数据是否正确之类的，有兴趣可以详细去看
     writeCRC(out);
   }
   

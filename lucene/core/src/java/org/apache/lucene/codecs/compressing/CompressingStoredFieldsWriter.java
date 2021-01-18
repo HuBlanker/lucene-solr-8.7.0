@@ -90,8 +90,9 @@ public final class CompressingStoredFieldsWriter extends StoredFieldsWriter {
   private final int maxDocsPerChunk;
 
   private final ByteBuffersDataOutput bufferedDocs;
-  // 每一个doc对应的field的数量. 每次用numBufferedDocs这个作为下表的
+  // 每一个doc对应的field的数量. 每次用numBufferedDocs这个作为下标的
   private int[] numStoredFields; // number of stored fields
+  // 开始存储的是，每个doc存储完所有field的偏移量，最后会转为每个doc所有的内容的length. 也是以numBufferedDocs作为下标的
   private int[] endOffsets; // end offsets in bufferedDocs
   private int docBase; // doc ID at the beginning of the chunk
   // docBase + numBufferDoc 可以算出来当前的DocID
@@ -217,9 +218,11 @@ public final class CompressingStoredFieldsWriter extends StoredFieldsWriter {
     fieldsStream.writeVInt((numBufferedDocs) << 1 | slicedBit);
 
     // save numStoredFields
+    //　每一个doc有多少个field
     saveInts(numStoredFields, numBufferedDocs, fieldsStream);
 
     // save lengths
+    // 每一个doc的全部field的长度
     saveInts(lengths, numBufferedDocs, fieldsStream);
   }
 
@@ -265,7 +268,15 @@ public final class CompressingStoredFieldsWriter extends StoredFieldsWriter {
     numBufferedDocs = 0;
     bufferedDocs.reset();
   }
-  
+
+  /**
+   * 写了什么？
+   * １．编号及类型
+   * 2. 内容
+   *    2.1 如果是基本类型，直接存储
+   *    2.2 如果是bytes, 写长度和内容
+   *    2.3 如果是string, 先写长度，然后写内容
+   */
   @Override
   public void writeField(FieldInfo info, IndexableField field)
       throws IOException {
