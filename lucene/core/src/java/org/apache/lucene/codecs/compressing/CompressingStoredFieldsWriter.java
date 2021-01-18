@@ -90,9 +90,11 @@ public final class CompressingStoredFieldsWriter extends StoredFieldsWriter {
   private final int maxDocsPerChunk;
 
   private final ByteBuffersDataOutput bufferedDocs;
+  // 每一个doc对应的field的数量. 每次用numBufferedDocs这个作为下表的
   private int[] numStoredFields; // number of stored fields
   private int[] endOffsets; // end offsets in bufferedDocs
   private int docBase; // doc ID at the beginning of the chunk
+  // docBase + numBufferDoc 可以算出来当前的DocID
   private int numBufferedDocs; // docBase + numBufferedDocs == current doc ID
   
   private long numDirtyChunks; // number of incomplete compressed blocks written
@@ -161,6 +163,7 @@ public final class CompressingStoredFieldsWriter extends StoredFieldsWriter {
 
   @Override
   public void finishDocument() throws IOException {
+    // 如果缓存满了(缓存的doc数量等于内存中存储field数量的数组), 就扩容咯
     if (numBufferedDocs == this.numStoredFields.length) {
       final int newLength = ArrayUtil.oversize(numBufferedDocs + 1, 4);
       this.numStoredFields = ArrayUtil.growExact(this.numStoredFields, newLength);
@@ -303,6 +306,8 @@ public final class CompressingStoredFieldsWriter extends StoredFieldsWriter {
       }
     }
 
+    // 存储了 field的内部编号, 以及当前field的类型,是四种数字呢,还是字符串,还是二进制串.
+    // number , 一个int, 右边的3位是类型, 左边的是编号
     final long infoAndBits = (((long) info.number) << TYPE_BITS) | bits;
     bufferedDocs.writeVLong(infoAndBits);
 
