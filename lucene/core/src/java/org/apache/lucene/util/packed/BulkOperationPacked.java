@@ -23,25 +23,51 @@ package org.apache.lucene.util.packed;
  */
 class BulkOperationPacked extends BulkOperation {
 
+  // 存储的每个值需要的bit数
   private final int bitsPerValue;
+  // 用bitsPerValue来存储数据, 同时数据真正存储在long里面.
+  // 需要最少多少个long, 才能正好达到边界.
+  // 比如使用1个bit存储, 那么1个long=64位可以正好保存64个数
+  // 比如使用4bit存储, 那么使用1个long=64位正好可以保存16个数, bit位不多不少
+  // 但是使用12bit存数据, 那么使用1个long, 64无法整除12, 会有多的,少的情况. 此时需要3个long, 3 * 64 能正好
+  // 存储 12 * 16, 也就是16个12bit的数字.
+  // 所以算法很明显, bitPerValue和64的最小公倍数除以64.
+  // 理解为: 一个完整的块, 需要多少个long.
   private final int longBlockCount;
+  // 理解为: 一个完整的块, 需要多少个perBit存储的数字.
   private final int longValueCount;
+
+  // 每个数用bitPerValue, 如果用byte存, 每个完整的块, 需要几个byte.
   private final int byteBlockCount;
+  // 每个完整的块(用byte存储), 能存几个bitsPerValue.
   private final int byteValueCount;
+
+  // 两个mask
   private final long mask;
   private final int intMask;
 
+  /**
+   * 块的批量操作???
+   * @param bitsPerValue
+   */
   public BulkOperationPacked(int bitsPerValue) {
     this.bitsPerValue = bitsPerValue;
     assert bitsPerValue > 0 && bitsPerValue <= 64;
+    // 求最小公倍数就是这么求的
     int blocks = bitsPerValue;
     while ((blocks & 1) == 0) {
       blocks >>>= 1;
     }
     this.longBlockCount = blocks;
+    // 最小公倍数相对于bitPerValue的商.
     this.longValueCount = 64 * longBlockCount / bitsPerValue;
+
+    // 为了存储一个完整的快, 需要多少个byte
     int byteBlockCount = 8 * longBlockCount;
+    // 完整的块, 需要多少个perBit的数, 之后变了
     int byteValueCount = longValueCount;
+
+    // 求最大公约数之类的
     while ((byteBlockCount & 1) == 0 && (byteValueCount & 1) == 0) {
       byteBlockCount >>>= 1;
       byteValueCount >>>= 1;

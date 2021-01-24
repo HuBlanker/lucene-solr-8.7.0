@@ -490,6 +490,7 @@ public final class CompressingStoredFieldsWriter extends StoredFieldsWriter {
     }
   }
 
+  // all finish
   @Override
   public void finish(FieldInfos fis, int numDocs) throws IOException {
     if (numBufferedDocs > 0) {

@@ -164,14 +164,27 @@ abstract class BulkOperation implements PackedInts.Decoder, PackedInts.Encoder {
    *
    * This method computes <code>iterations</code> as
    * <code>ramBudget / (b + 8v)</code> (since a long is 8 bytes).
+   *
+   * @param ramBudget : 每个budget的字节数?, 通常为1024
    */
+  // Bulk 操作的时候, 内存里面有buffer. 这个buffer一共只有1024bytes.
+  // 但是有两个变量.
+  // 注意: 这里是算内存的, 也就是算, 1024个byte的内存, 够干啥. 当然同时要满足pack本身的要求.
+  // 也就是 一个块要能正好写到边界, 别多了少了bit位.
   public final int computeIterations(int valueCount, int ramBudget) {
+    // 1024 个字节的内存. 有两个变量, 都要用.
+    // 1. 原始数据. 一个完整的块, 要byteValueCount()个原始数据,每个数据用long存储. 所以一个完整的块,要 8 * byteValueCount() 个字节.
+    // 2. 编码后的数据. 一个完整的块, 要byteBlockCount()个字节.
+    // 所以iterations. 代表的是, 1024个字节的内存, 够缓存多少个完整的块.
     final int iterations = ramBudget / (byteBlockCount() + 8 * byteValueCount());
+    // 至少缓存一个
     if (iterations == 0) {
       // at least 1
       return 1;
+      // 块的数量 * 每块里面原始数据的数量 > 你要存储的总数, 也就是说, 总共也用不了1024字节, 申请多了.
     } else if ((iterations - 1) * byteValueCount() >= valueCount) {
       // don't allocate for more than the size of the reader
+      // 所以只缓存, (总共要存的数量 / 每块里面能存的数量 ) 个完整的块. 因此总共也用不完1024字节嘛
       return (int) Math.ceil((double) valueCount / byteValueCount());
     } else {
       return iterations;

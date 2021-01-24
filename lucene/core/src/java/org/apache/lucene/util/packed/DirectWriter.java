@@ -58,19 +58,23 @@ public final class DirectWriter {
   final long numValues;
   // 输出方
   final DataOutput output;
-
   // 当前写了多少
   long count;
   boolean finished;
-  
   // for now, just use the existing writer under the hood
-  // 偏移吗？
+  // 当前写入了多少个, 在nextValues里面的偏移
   int off;
-  // 下一个block
+
+  // 这两个是符合对应关系的, 因此 nextValues.length * bitsPerValue = nextBlocks.length * 8
+  // 编码后的所有数据
   final byte[] nextBlocks;
+  // 所有的原始数据, 打算存这么多数字, 每个数字用bitsPerValue. 那么总共需要nextValues.length * bitsPerValue.
+  // 这些都要存在nextBlocks里面, 所以除以8就是nextBlocks的长度.
   final long[] nextValues;
-  // 优化了磁盘读写的一个东西
+
+  // 编码器
   final BulkOperation encoder;
+  // 1024内存能够缓存多少个完整的块.
   final int iterations;
   
   DirectWriter(DataOutput output, long numValues, int bitsPerValue) {
@@ -78,8 +82,12 @@ public final class DirectWriter {
     this.numValues = numValues;
     this.bitsPerValue = bitsPerValue;
     // 因为你需要的位不一样，那么需要的顺序读写的编码器就不一样，为了性能吧，搞了很多东西
+    // 搞了很多个编码解码器, 根据存储的位数不一样而不一样
     encoder = BulkOperation.of(PackedInts.Format.PACKED, bitsPerValue);
+    // 这里计算一下的目的是, 内存buffer尽量刚刚好用1024字节, 不要太小, 导致吞吐量降低, 不要太大, 导致oom.
+    // 用1024字节的内存, 能缓存多少个编码块. 如果用不了1024, 就只申请刚刚的大小.
     iterations = encoder.computeIterations((int) Math.min(numValues, Integer.MAX_VALUE), PackedInts.DEFAULT_BUFFER_SIZE);
+    // 申请内存里的对应buffer array.
     nextBlocks = new byte[iterations * encoder.byteBlockCount()];
     nextValues = new long[iterations * encoder.byteValueCount()];
   }

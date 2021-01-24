@@ -298,6 +298,8 @@ public class PackedInts {
     /**
      * The minimum number of byte blocks to encode in a single iteration, when
      * using byte encoding.
+     *
+     * 使用字节编码时，在一次迭代中编码的最小字节块数。
      */
     int byteBlockCount();
 

@@ -115,6 +115,7 @@ public final class FieldsIndexWriter implements Closeable {
 
     // dataOut　是fdx文件，是用来对fdt文件做索引的文件，所以fdt文件写入内容，我这里记录每个chunk的doc数量，占用字节数即可
     // 所以这里只能调用一次么，无论是多少个多大的field，都只能调用一次这里么
+    // 写fdx文件
     try (IndexOutput dataOut = dir.createOutput(IndexFileNames.segmentFileName(name, suffix, extension), ioContext)) {
       // 这个header，48个字节.
       CodecUtil.writeIndexHeader(dataOut, codecName + "Idx", VERSION_CURRENT, id, suffix);

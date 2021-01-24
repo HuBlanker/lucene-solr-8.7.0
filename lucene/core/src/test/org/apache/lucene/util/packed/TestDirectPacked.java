@@ -37,15 +37,33 @@ public class TestDirectPacked extends LuceneTestCase {
     Directory dir = FSDirectory.open(Paths.get("/tmp/lucene-test/"));
     dir.deleteFile("direct_writer_test.t");
     IndexOutput output = dir.createOutput("direct_writer_test.t", IOContext.DEFAULT);
-    int bitsPerValue = DirectWriter.bitsRequired(2);
+    int bitsPerValue =12;
     System.out.println(bitsPerValue);
     DirectWriter dw = DirectWriter.getInstance(output, 3, bitsPerValue);
-    dw.add(1);
-    dw.add(0);
+    dw.add(3);
     dw.add(2);
+    dw.add(1);
     dw.finish();
     output.close();
     dir.close();
+  }
+
+  public void testBit() {
+     int SUPPORTED_BITS_PER_VALUE[] = new int[] {
+        1, 2, 4, 8, 12, 16, 20, 24, 28, 32, 40, 48, 56, 64
+    };
+    for (int i : SUPPORTED_BITS_PER_VALUE) {
+      int blocks = i;
+      while ((blocks & 1) == 0) {
+        blocks >>>= 1;
+      }
+      System.out.println(i + "\t" + blocks);
+    }
+  }
+
+  public void testPack() {
+    BulkOperationPacked bulk = new BulkOperationPacked(12);
+
   }
 
 
