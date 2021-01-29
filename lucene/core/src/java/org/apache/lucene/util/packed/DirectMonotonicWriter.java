@@ -31,8 +31,7 @@ import org.apache.lucene.util.ArrayUtil;
  * average slope 还真是平均斜率
  * <p>
  * 写入单调递增的整数序列
- * 这个类把数据分成块，　然后对每个块计算平均斜率，最小值，然后编码期望值使用 "偏移量" 编码
- * 使用DirectWriter.
+ * 这个类把数据分成块，　然后对每个块计算平均斜率，最小值，然后只使用 DirectWriter来 编码 期望值的delta.
  * <p>
  * <br/>
  * <br/>
@@ -52,29 +51,27 @@ import org.apache.lucene.util.ArrayUtil;
  */
 public final class DirectMonotonicWriter {
 
-  // 一块有多少个int,　这里是 2的shift次方个吗？
+  // 一块有多少个int,　这里是 2的shift次方个
   public static final int MIN_BLOCK_SHIFT = 2;
   public static final int MAX_BLOCK_SHIFT = 22;
 
   // 这个类，　其实不知道是为了谁写
   // 但是仍然不妨碍一个记录元数据，一个记录真正的数据，
-  // 写field信息可以用，其他也可以
+  // 写field信息可以用，其他的docValue之类的也可以
   final IndexOutput meta;
   final IndexOutput data;
 
-  // 总数, 不区分什么chunk,block等等，对于这个类来说，就是你想要我写多少个。
+  // 总数, 不区分chunk,block等等，对于这个类来说，就是你想要我写多少个。
   final long numValues;
 
-
-  // data文件初始化的时候已经被写了多少
+  // data文件初始化的时候的文件写入地址.
   final long baseDataPointer;
 
-
-  // 内部缓冲区，分块用的这个
+  // 内部缓冲区
   final long[] buffer;
-  // 当前已经buffer了多少个？
+  // 当前已经buffer了多少个
   int bufferSize;
-  // 总数计数，　bufferSize会被清除的
+  // 总数计数，bufferSize会被清除的
   long count;
   boolean finished;
 
@@ -157,6 +154,7 @@ public final class DirectMonotonicWriter {
     // 元数据里面开始写, 最小值，平均斜率，data文件从开始到现在写了多少，
     meta.writeLong(min);
     meta.writeInt(Float.floatToIntBits(avgInc));
+    // 当前block, 相对于整个类开始写的时候, 的偏移量
     meta.writeLong(data.getFilePointer() - baseDataPointer);
     // 是不是意味着全是0, 也就是绝对的单调递增,等差数列的意思？
     // 如果是等差数列，就不在data里面写了，直接在meta里面记一下最小值就完事了，之后等差就好了
@@ -193,6 +191,7 @@ public final class DirectMonotonicWriter {
    *                                  如果传入的值不是递增的，就报错
    */
   public void add(long v) throws IOException {
+    // 检查是否是单调递增
     if (v < previous) {
       throw new IllegalArgumentException("Values do not come in order: " + previous + ", " + v);
     }

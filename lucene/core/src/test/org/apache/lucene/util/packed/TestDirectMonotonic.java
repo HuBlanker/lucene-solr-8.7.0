@@ -38,7 +38,6 @@ import org.junit.Ignore;
 public class TestDirectMonotonic extends LuceneTestCase {
 
   // 测试下细节
-  @Ignore
   public void testHuyan() throws Exception {
     Directory dir = FSDirectory.open(Paths.get("/tmp/lucene-test/"));
     dir.deleteFile("direct_mon_writer_test.meta");
@@ -46,16 +45,19 @@ public class TestDirectMonotonic extends LuceneTestCase {
     IndexOutput metaOut = dir.createOutput("direct_mon_writer_test.meta", IOContext.DEFAULT);
     IndexOutput dataOut = dir.createOutput("direct_mon_writer_test.data", IOContext.DEFAULT);
 
-    DirectMonotonicWriter writer = DirectMonotonicWriter.getInstance(metaOut, dataOut, 3, 8);
+    DirectMonotonicWriter writer = DirectMonotonicWriter.getInstance(metaOut, dataOut, 4, 8);
     writer.add(100);
-    writer.add(101);
-    writer.add(108);
+    writer.add(102);
+    writer.add(103);
+    writer.add(105);
     writer.finish();
     metaOut.close();
     dataOut.close();
     dir.close();
 
   }
+
+
 
   public void testValidation() {
     IllegalArgumentException e = expectThrows(IllegalArgumentException.class,

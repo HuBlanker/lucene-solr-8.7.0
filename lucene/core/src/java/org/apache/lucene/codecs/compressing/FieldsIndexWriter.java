@@ -74,10 +74,13 @@ public final class FieldsIndexWriter implements Closeable {
     this.id = id;
     this.blockShift = blockShift;
     this.ioContext = ioContext;
+    // docNum 的tmp文件
     this.docsOut = dir.createTempOutput(name, codecName + "-doc_ids", ioContext);
     boolean success = false;
     try {
       CodecUtil.writeHeader(docsOut, codecName + "Docs", VERSION_CURRENT);
+
+      // StartPoint 的tmp文件
       filePointersOut = dir.createTempOutput(name, codecName + "file_pointers", ioContext);
       CodecUtil.writeHeader(filePointersOut, codecName + "FilePointers", VERSION_CURRENT);
       success = true;
