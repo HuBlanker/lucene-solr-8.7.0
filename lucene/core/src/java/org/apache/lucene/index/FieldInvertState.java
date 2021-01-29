@@ -28,13 +28,29 @@ import org.apache.lucene.util.AttributeSource;
  * This class tracks the number and position / offset parameters of terms
  * being added to the index. The information collected in this class is
  * also used to calculate the normalization factor for a field.
+ *
+ * <br/>
+ *
+ * 此类跟踪要添加到索引中的术语的数量和位置/偏移参数。
+ *
+ * <br/>
+ *
+ * 在此类中收集的信息还用于计算字段的归一化因子。
+ *
+ * <br/>
+ *
+ * 提供了一堆字段的getter/setter.　其他没啥了
  * 
  * @lucene.experimental
  */
 public final class FieldInvertState {
+  // 版本号
   final int indexCreatedVersionMajor;
+  // 字段名
   final String name;
+  // 索引类型
   final IndexOptions indexOptions;
+  //
   int position;
   int length;
   int numOverlap;

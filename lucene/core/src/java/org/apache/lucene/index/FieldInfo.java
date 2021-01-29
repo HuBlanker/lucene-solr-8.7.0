@@ -26,34 +26,51 @@ import java.util.Objects;
  *  of this class are thread-safe for multiple readers, but only one thread can
  *  be adding documents at a time, with no other reader or writer threads
  *  accessing this object.
+ *
+ *  访问fieldInfo文件，该文件描述了field是否要被索引。
+ *  每个segment拥有独立的FieldInfo文件。
+ *  这个类的实例对于多个reader来说是线程安全的，但是同一时间只能一个线程进行添加document操作，且同时不能有别的reader/writer访问该实例。
+ *
+ *  其实就是说，是个读写锁呗，可以多线程读,但是写操作是完全互斥的，写和读也互斥。
+ *
+ *  // 保存了很多的属性，然后提供了对这些属性的getter/setter. 及每次操作后的参数合法性校验
+ *  TODO: 每个属性的详细含义
  **/
 
 public final class FieldInfo {
+  // field名字
   /** Field's name */
   public final String name;
+  // 内部编号，TODO 具体编号值生成方法待查
   /** Internal field number */
   public final int number;
 
+  // 内容的类型
   private DocValuesType docValuesType = DocValuesType.NONE;
 
   // True if any document indexed term vectors
+  // 是否索引termVectors, 暂时忽略
   private boolean storeTermVector;
 
+  // 忽略关联啥玩意的
   private boolean omitNorms; // omit norms associated with indexed fields  
 
   private IndexOptions indexOptions = IndexOptions.NONE;
+  // 不知道
   private boolean storePayloads; // whether this field stores payloads together with term positions
 
   private final Map<String,String> attributes;
 
   private long dvGen;
 
+  // 不懂
   /** If both of these are positive it means this field indexed points
    *  (see {@link org.apache.lucene.codecs.PointsFormat}). */
   private int pointDimensionCount;
   private int pointIndexDimensionCount;
   private int pointNumBytes;
 
+  // 不懂
   // whether this field is used as the soft-deletes field
   private final boolean softDeletesField;
 
@@ -89,7 +106,9 @@ public final class FieldInfo {
 
   /** 
    * Performs internal consistency checks.
-   * Always returns true (or throws IllegalStateException) 
+   * Always returns true (or throws IllegalStateException)
+   * 一致性检查
+   * 其实就是个参数合理性的校验，那么多bool参数，之间有互斥等因素
    */
   public boolean checkConsistency() {
     if (indexOptions != IndexOptions.NONE) {
@@ -141,6 +160,11 @@ public final class FieldInfo {
   }
 
   // should only be called by FieldInfos#addOrUpdate
+
+  /**
+   *
+   * 赋值操作，　把当前的所有信息改了，改完检查一下参数
+   */
   void update(boolean storeTermVector, boolean omitNorms, boolean storePayloads, IndexOptions indexOptions,
               Map<String, String> attributes, int dimensionCount, int indexDimensionCount, int dimensionNumBytes) {
     if (indexOptions == null) {
@@ -184,6 +208,7 @@ public final class FieldInfo {
 
   /** Record that this field is indexed with points, with the
    *  specified number of dimensions and bytes per dimension. */
+  // set方法，设置一下point相关的几个值
   public void setPointDimensions(int dimensionCount, int indexDimensionCount, int numBytes) {
     if (dimensionCount <= 0) {
       throw new IllegalArgumentException("point dimension count must be >= 0; got " + dimensionCount + " for field=\"" + name + "\"");

@@ -267,16 +267,28 @@ public final class Lucene60FieldInfosFormat extends FieldInfosFormat {
 
   @Override
   public void write(Directory directory, SegmentInfo segmentInfo, String segmentSuffix, FieldInfos infos, IOContext context) throws IOException {
+    // fnm文件名字
     final String fileName = IndexFileNames.segmentFileName(segmentInfo.name, segmentSuffix, EXTENSION);
     try (IndexOutput output = directory.createOutput(fileName, context)) {
+      // 写入Header
       CodecUtil.writeIndexHeader(output, Lucene60FieldInfosFormat.CODEC_NAME, Lucene60FieldInfosFormat.FORMAT_CURRENT, segmentInfo.getId(), segmentSuffix);
+      // infos-size,　一共有多少个field
       output.writeVInt(infos.size());
+      //
       for (FieldInfo fi : infos) {
+        // 检查一下一致性
         fi.checkConsistency();
 
+        // 写入string 名字
         output.writeString(fi.name);
+        // 编号
         output.writeVInt(fi.number);
 
+        // 用一个byte来存储了四个符号位,分别代表
+        // hasVectors
+        // omitsNorms
+        // storePayloads
+        // soft_delete_field
         byte bits = 0x0;
         if (fi.hasVectors()) bits |= STORE_TERMVECTOR;
         if (fi.omitsNorms()) bits |= OMIT_NORMS;
@@ -284,18 +296,25 @@ public final class Lucene60FieldInfosFormat extends FieldInfosFormat {
         if (fi.isSoftDeletesField()) bits |= SOFT_DELETES_FIELD;
         output.writeByte(bits);
 
+        // 一个byte标识的IndexOptionsByte
         output.writeByte(indexOptionsByte(fi.getIndexOptions()));
 
         // pack the DV type and hasNorms in one byte
+        // 一个byte标识的DocValuesType
         output.writeByte(docValuesByte(fi.getDocValuesType()));
+        // long型的DocValuesGen
         output.writeLong(fi.getDocValuesGen());
+        // mapOfStrings 属性值
         output.writeMapOfStrings(fi.attributes());
+        // 写入形状
         output.writeVInt(fi.getPointDimensionCount());
+        // 形状的剩下两个参数
         if (fi.getPointDimensionCount() != 0) {
           output.writeVInt(fi.getPointIndexDimensionCount());
           output.writeVInt(fi.getPointNumBytes());
         }
       }
+      // Footer
       CodecUtil.writeFooter(output);
     }
   }

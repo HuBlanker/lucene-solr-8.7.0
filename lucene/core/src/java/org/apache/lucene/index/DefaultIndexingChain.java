@@ -464,6 +464,7 @@ final class DefaultIndexingChain extends DocConsumer {
     }
   }
 
+  // 处理一个文档
   @Override
   public void processDocument(int docID, Iterable<? extends IndexableField> document) throws IOException {
 
@@ -480,10 +481,13 @@ final class DefaultIndexingChain extends DocConsumer {
     // (i.e., we cannot have more than one TokenStream
     // running "at once"):
 
+    // start
     termsHash.startDocument();
 
+    // start
     startStoredFields(docID);
     try {
+      // 当前doc里面的所有field
       for (IndexableField field : document) {
         fieldCount = processField(docID, field, fieldGen, fieldCount);
       }
@@ -498,6 +502,7 @@ final class DefaultIndexingChain extends DocConsumer {
     }
 
     try {
+      // end
       termsHash.finishDocument(docID);
     } catch (Throwable th) {
       // Must abort, on the possibility that on-disk term
@@ -507,17 +512,24 @@ final class DefaultIndexingChain extends DocConsumer {
     }
   }
 
+  /**
+   *  索引写入过程中，处理每一个Field的地方
+   */
   private int processField(int docID, IndexableField field, long fieldGen, int fieldCount) throws IOException {
+    // 名字
     String fieldName = field.name();
+    // FieldType. 制定了一大堆，是否要存储，是否要分词，是否省略标准化过程等等
     IndexableFieldType fieldType = field.fieldType();
 
     PerField fp = null;
 
+    // 索引选项，可以制定都要索引哪些内容
     if (fieldType.indexOptions() == null) {
       throw new NullPointerException("IndexOptions must not be null (field: \"" + field.name() + "\")");
     }
 
     // Invert indexed fields:
+    // 要有点索引的东西，才操作
     if (fieldType.indexOptions() != IndexOptions.NONE) {
       fp = getOrAddField(fieldName, fieldType, true);
       boolean first = fp.fieldGen != fieldGen;
@@ -532,6 +544,8 @@ final class DefaultIndexingChain extends DocConsumer {
     }
 
     // Add stored fields:
+    // 如果一个Field要存储，那么在这里处理一些东西
+    // 熟悉的地方回来了，　之前学习fdt,fdx,fdm三个文件入口就在这里哦
     if (fieldType.stored()) {
       if (fp == null) {
         fp = getOrAddField(fieldName, fieldType, false);
@@ -808,35 +822,49 @@ final class DefaultIndexingChain extends DocConsumer {
   }
 
   /** NOTE: not static: accesses at least docState, termsHash. */
+  // 意义在哪？　又在FieldInfo上面封装了几个字段呗
   private final class PerField implements Comparable<PerField> {
 
+    // 版本号，lucene的大版本号
     final int indexCreatedVersionMajor;
+    // 真实信息
     final FieldInfo fieldInfo;
+    // 不认识
     final Similarity similarity;
 
+    // Field翻转什么万一啊
     FieldInvertState invertState;
+    // 不认识
     TermsHashPerField termsHashPerField;
 
     // Non-null if this field ever had doc values in this
     // segment:
+    // 不认识
     DocValuesWriter<?> docValuesWriter;
 
     // Non-null if this field ever had points in this segment:
+    // 不认识
     PointValuesWriter pointValuesWriter;
 
     /** We use this to know when a PerField is seen for the
      *  first time in the current document. */
+
     long fieldGen = -1;
 
     // Used by the hash table
+    // 链表
     PerField next;
 
     // Lazy init'd:
+    // b标准化写入咯
     NormValuesWriter norms;
     
     // reused
+    // 分词
     TokenStream tokenStream;
+    // 不认识
     private final InfoStream infoStream;
+    // 分词器
     private final Analyzer analyzer;
 
     PerField(int indexCreatedVersionMajor, FieldInfo fieldInfo, boolean invert, Similarity similarity, InfoStream infoStream, Analyzer analyzer) {
@@ -853,6 +881,7 @@ final class DefaultIndexingChain extends DocConsumer {
     void setInvertState() {
       invertState = new FieldInvertState(indexCreatedVersionMajor, fieldInfo.name, fieldInfo.getIndexOptions());
       termsHashPerField = termsHash.addField(invertState, fieldInfo);
+      // 如果需要标准化，才初始化标准化相关东西
       if (fieldInfo.omitsNorms() == false) {
         assert norms == null;
         // Even if no documents actually succeed in setting a norm, we still write norms for this segment:
@@ -888,6 +917,7 @@ final class DefaultIndexingChain extends DocConsumer {
     /** Inverts one field for one document; first is true
      *  if this is the first time we are seeing this field
      *  name in this document. */
+    // 翻转是指变成倒排的意思么？？？？？
     public void invert(int docID, IndexableField field, boolean first) throws IOException {
       if (first) {
         // First time we're seeing this field (indexed) in

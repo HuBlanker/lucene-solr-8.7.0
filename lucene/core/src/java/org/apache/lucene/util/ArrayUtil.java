@@ -22,6 +22,9 @@ import java.util.Comparator;
 /**
  * Methods for manipulating arrays.
  *
+ * 这个类有用，比ArrayList性能肯定高
+ *
+ *
  * @lucene.internal
  */
 
@@ -223,6 +226,7 @@ public final class ArrayUtil {
   }
 
   /** Returns an array whose size is at least {@code minSize}, generally over-allocating exponentially */
+  // 对这个数组grow一下，至少minSize个，实际上通常用2的指数级别增大
   public static <T> T[] grow(T[] array, int minSize) {
     assert minSize >= 0 : "size must be positive (got " + minSize + "): likely integer overflow?";
     if (array.length < minSize) {

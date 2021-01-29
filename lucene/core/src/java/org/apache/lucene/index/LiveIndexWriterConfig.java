@@ -107,6 +107,7 @@ public class LiveIndexWriterConfig {
   protected volatile boolean checkPendingFlushOnUpdate = true;
 
   /** soft deletes field */
+  // 配置软删除的Field，具体什么是软删除呢
   protected String softDeletesField = null;
 
   /** Amount of time to wait for merges returned by MergePolicy.findFullFlushMerges(...) */

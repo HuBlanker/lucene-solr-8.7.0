@@ -20,6 +20,9 @@ package org.apache.lucene.index;
 /**
  * Controls how much information is stored in the postings lists.
  * @lucene.experimental
+ *
+ * 索引的选项：
+ * 可以选择保存哪些信息
  */
 
 public enum IndexOptions { 

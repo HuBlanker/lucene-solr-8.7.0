@@ -525,6 +525,29 @@ public final class IndexWriterConfig extends LiveIndexWriterConfig {
    * can still be hard-deleted. Hard-deleted documents will won't considered as soft-deleted even if they have
    * a value in the soft-deletes field.
    *
+   * <br/>
+   * 设置软删除的字段名。
+   * <br/>
+   *　lucene中的软删除字段是一个文档内容字段，如果某个文档在这个字段中至少有一个值，则这个文档被标记为软删除。
+   * <br/>
+   * 如果某个文档被标记为软删除，那么该文档被视为已经通过IndexWriterAPI进行了硬删除
+   * <br/>
+   * 合并之后会回收软删除及硬删除的文档，
+   * <br/>
+   * 从IndexWriter中获取的索引阅读器将反应他的活跃文档中所有已经删除的文档
+   * <br/>
+   * 如果软删除被使用，必须使用`IndexWriter.softUpdateDocument`进行索引。删除将通过`IndexWriter.updateDocValues`来执行。
+   *
+   * 如果合并策略修改了合并阅读器的存活文档。那么软删除允许跨合并保留文档，例如SoftDeletesRetentionMergePolicy，允许制定人已查询以标记所有应该在合并后保留的文档。
+   * 例如，用于在一定时间间隔内保留所有文档修改，或者如果索引中存在某种序列ID，则保留最后N次操作。目前不支持API来删除软删除的文档ment。为了取消删除，必须使用IndexWriter.softUpdateDocument（Term，Iterable，Field ...）重新索引文档
+   *
+   * <br/>
+   *
+   * 这个属性的缺省值为null.　他禁用软删除，如果启用了软删除，仍旧可以硬删除。即使这个文档中存在软删除字段，其中也有值。
+   *
+   * <br/>
+   * 一般不咋用，　但是我看测试类里，将这个设置为：　_soft_deletes.
+   *
    * @see #getSoftDeletesField()
    */
   public IndexWriterConfig setSoftDeletesField(String softDeletesField) {

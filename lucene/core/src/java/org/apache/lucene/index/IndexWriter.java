@@ -1066,6 +1066,7 @@ public class IndexWriter implements Closeable, TwoPhaseCommit, Accountable,
 
       // start with previous field numbers, but new FieldInfos
       // NOTE: this is correct even for an NRT reader because we'll pull FieldInfos even for the un-committed segments:
+      // 用以前的编号,但是新的fieldInfo
       globalFieldNumberMap = getFieldNumberMap();
 
       validateIndexSort();
@@ -1155,20 +1156,24 @@ public class IndexWriter implements Closeable, TwoPhaseCommit, Accountable,
   // this is used on IW init and addIndexes(Dir) to create/update the global field map.
   // TODO: fix tests abusing this method!
   static FieldInfos readFieldInfos(SegmentCommitInfo si) throws IOException {
+    // 拿到分片信息的编码器，然后读出来编码
     Codec codec = si.info.getCodec();
     FieldInfosFormat reader = codec.fieldInfosFormat();
-    
+
+    // 如果当前有更新，就用编码器Lucene60FieldInfosFormat读一下以前的field信息出来
     if (si.hasFieldUpdates()) {
       // there are updates, we read latest (always outside of CFS)
       final String segmentSuffix = Long.toString(si.getFieldInfosGen(), Character.MAX_RADIX);
       return reader.read(si.info.dir, si.info, segmentSuffix, IOContext.READONCE);
     } else if (si.info.getUseCompoundFile()) {
+      // 如果用的是符合索引文件，那就从符合索引文件读取咯
       // cfs
       try (Directory cfs = codec.compoundFormat().getCompoundReader(si.info.dir, si.info, IOContext.DEFAULT)) {
         return reader.read(cfs, si.info, "", IOContext.READONCE);
       }
     } else {
       // no cfs
+      // 读取正常的文件
       return reader.read(si.info.dir, si.info, "", IOContext.READONCE);
     }
   }
@@ -1176,10 +1181,20 @@ public class IndexWriter implements Closeable, TwoPhaseCommit, Accountable,
   /**
    * Loads or returns the already loaded the global field number map for this {@link SegmentInfos}.
    * If this {@link SegmentInfos} has no global field number map the returned instance is empty
+   * // 返回一个加载好的，全局的field编码，如果没有，就给个空的咯
+   * // 研究FieldInfo写入的时候，　我们默认他是空的
    */
   private FieldNumbers getFieldNumberMap() throws IOException {
+    // 新建一个空的FieldNumbers, 软删除字段为空
+    // 其实这里面没干啥，就是把一堆field的映射map初始化了，给了个空的map
     final FieldNumbers map = new FieldNumbers(config.softDeletesField);
 
+    // 读取所有的分片提交信息，把所有field信息添加到创建的空map里面
+    // 如果索引没有提交信息，那就是个空的咯
+    // 这里其实不重要了
+    // 1. 假设我的索引文件已经提交过20次，那么写入的也是之前新建的内容，读出来会一模一样
+    // 2. 我现在在研究怎么写入文件，不妨假设我们这是第一次写入，那么这里绝对就是空
+    // 3. 研究完第一次，之后的每一次都是将这些读出来，　然后附加一些第一次的写入内容而已
     for(SegmentCommitInfo info : segmentInfos) {
       FieldInfos fis = readFieldInfos(info);
       for(FieldInfo fi : fis) {
