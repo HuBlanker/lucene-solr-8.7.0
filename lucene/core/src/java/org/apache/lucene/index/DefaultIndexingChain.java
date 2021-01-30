@@ -61,6 +61,8 @@ final class DefaultIndexingChain extends DocConsumer {
 
 
   final Counter bytesUsed = Counter.newCounter();
+
+  // FieldInfos　的构造器，应该就是在这个类里面添加信息的
   final FieldInfos.Builder fieldInfos;
 
   // Writes postings and term vectors:
@@ -73,10 +75,13 @@ final class DefaultIndexingChain extends DocConsumer {
   // NOTE: I tried using Hash Map<String,PerField>
   // but it was ~2% slower on Wiki and Geonames with Java
   // 1.7.0_25:
+  // 用来保存所有field的手动hash表及它的hashmask
   private PerField[] fieldHash = new PerField[2];
   private int hashMask = 1;
 
+  // 全局的Field总数，比如每个doc都是相同的name/desc. 那么这里就是2.
   private int totalFieldCount;
+  // 其实约等于当前doc编号，因为每次处理一个文档，就+1,然后对于当前文档的所有field,都是这个值了
   private long nextFieldGen;
 
   // Holds fields seen in each document
@@ -420,18 +425,21 @@ final class DefaultIndexingChain extends DocConsumer {
   }
 
   private void rehash() {
+    // 扩容两倍
     int newHashSize = (fieldHash.length*2);
     assert newHashSize > fieldHash.length;
 
-    PerField newHashArray[] = new PerField[newHashSize];
+    PerField[] newHashArray = new PerField[newHashSize];
 
     // Rehash
+    // 处理拉链的rehash
     int newHashMask = newHashSize-1;
     for(int j=0;j<fieldHash.length;j++) {
       PerField fp0 = fieldHash[j];
       while(fp0 != null) {
         final int hashPos2 = fp0.fieldInfo.name.hashCode() & newHashMask;
         PerField nextFP0 = fp0.next;
+        // 又是一个拉链法的后来居上而已
         fp0.next = newHashArray[hashPos2];
         newHashArray[hashPos2] = fp0;
         fp0 = nextFP0;
@@ -470,6 +478,7 @@ final class DefaultIndexingChain extends DocConsumer {
 
     // How many indexed field names we've seen (collapses
     // multiple field instances by the same name):
+    // 当前doc里的count递增编号
     int fieldCount = 0;
 
     long fieldGen = nextFieldGen++;
@@ -514,6 +523,13 @@ final class DefaultIndexingChain extends DocConsumer {
 
   /**
    *  索引写入过程中，处理每一个Field的地方
+   *  <il>
+   *  <li>1. 是否要索引，处理倒排信息</li>
+   *  <li>2. 是否要存储，处理正排信息</li>
+   *  <li>3. 是否要咋的，我没看懂</li>
+   *  </il>
+   *  之后就完事了
+   *
    */
   private int processField(int docID, IndexableField field, long fieldGen, int fieldCount) throws IOException {
     // 名字
@@ -529,14 +545,20 @@ final class DefaultIndexingChain extends DocConsumer {
     }
 
     // Invert indexed fields:
-    // 要有点索引的东西，才操作
+    // 处理需要index的东西，那就是搞倒排
     if (fieldType.indexOptions() != IndexOptions.NONE) {
       fp = getOrAddField(fieldName, fieldType, true);
+      // 只要fp.fieldGen=-1,就会为真，此时意味着这个field是所有文档中的第一次出现,那肯定是first了。此时fieldGen是文档编号
+      // 假设fp.fieldGen=2,从第二个文档开始就没见过了,fieldGen=10, 就会为真，此时意味着这个field是<当前文档>中的第一次出现,那肯定是first了。此时fieldGen是文档编号
       boolean first = fp.fieldGen != fieldGen;
+      // 把倒排内容搞起来, 我先不看
       fp.invert(docID, field, first);
 
       if (first) {
+        // 如果当前文档中第一次出现这个field。
+        // 就记录下，当前文档中所有field，加一个,把PerField缓存起来的作用么？
         fields[fieldCount++] = fp;
+        // 第一次出现的时候，改下fieldGen,这样后面就能认出来不是第一次了
         fp.fieldGen = fieldGen;
       }
     } else {
@@ -544,6 +566,7 @@ final class DefaultIndexingChain extends DocConsumer {
     }
 
     // Add stored fields:
+    // 处理需要stored的内容，那就是保存个正排
     // 如果一个Field要存储，那么在这里处理一些东西
     // 熟悉的地方回来了，　之前学习fdt,fdx,fdm三个文件入口就在这里哦
     if (fieldType.stored()) {
@@ -564,6 +587,7 @@ final class DefaultIndexingChain extends DocConsumer {
       }
     }
 
+    // 处理docValue，处理完就完事了
     DocValuesType dvType = fieldType.docValuesType();
     if (dvType == null) {
       throw new NullPointerException("docValuesType must not be null (field: \"" + fieldName + "\")");
@@ -584,6 +608,7 @@ final class DefaultIndexingChain extends DocConsumer {
     return fieldCount;
   }
 
+  // check下这个field是否真的完全不需要任何索引动作
   private static void verifyUnIndexedFieldType(String name, IndexableFieldType ft) {
     if (ft.storeTermVectors()) {
       throw new IllegalArgumentException("cannot store term vectors "
@@ -613,6 +638,7 @@ final class DefaultIndexingChain extends DocConsumer {
     // Record dimensions for this field; this setter will throw IllegalArgExc if
     // the dimensions were already set to something different:
     if (fp.fieldInfo.getPointDimensionCount() == 0) {
+      // 设置dimensions
       fieldInfos.globalFieldNumbers.setDimensions(fp.fieldInfo.number, fp.fieldInfo.name, pointDimensionCount, pointIndexDimensionCount, dimensionNumBytes);
     }
 
@@ -690,6 +716,7 @@ final class DefaultIndexingChain extends DocConsumer {
         final Sort indexSort = indexWriterConfig.getIndexSort();
         validateIndexSortDVType(indexSort, fp.fieldInfo.name, dvType);
       }
+      // 设置docValueType
       fieldInfos.globalFieldNumbers.setDocValuesType(fp.fieldInfo.number, fp.fieldInfo.name, dvType);
     }
 
@@ -755,13 +782,15 @@ final class DefaultIndexingChain extends DocConsumer {
    *  absorbing the type information from {@link FieldType},
    *  and creates a new {@link PerField} if this field name
    *  wasn't seen yet. */
+  // 获取or新建一个PerField
   private PerField getOrAddField(String name, IndexableFieldType fieldType, boolean invert) {
 
     // Make sure we have a PerField allocated
-    // hashPosition , 与1取与, 奇偶数
+    // hashPosition , 哈希值取膜, 求在hash表中的位置呢
     final int hashPos = name.hashCode() & hashMask;
-    // 就两个...
+    // 初始化size=2
     PerField fp = fieldHash[hashPos];
+    // 这里：找对了hash值，然后在翻链表找
     while (fp != null && !fp.fieldInfo.name.equals(name)) {
       fp = fp.next;
     }
@@ -771,26 +800,31 @@ final class DefaultIndexingChain extends DocConsumer {
       // 拿不到, 意味着当前分片中我们第一次见这个Field
 
       // 一个初始值, 除了名字和number是对的, 其他都是默认值
+      // 刚才走远了，重新来，这里从FieldInfos里面创建、获取域信息
       FieldInfo fi = fieldInfos.getOrAdd(name);
-      // set indexoptions
+      // 给FieldInfo设置索引信息
       initIndexOptions(fi, fieldType.indexOptions());
       Map<String, String> attributes = fieldType.getAttributes();
+      // 设置属性信息
       if (attributes != null) {
         attributes.forEach(fi::putAttribute);
       }
 
+      // 新建的一个fp
       fp = new PerField(indexCreatedVersionMajor, fi, invert,
           indexWriterConfig.getSimilarity(), indexWriterConfig.getInfoStream(), indexWriterConfig.getAnalyzer());
+
+      // 拉链法hash-table, 后来者居上，把之前的往next上挪一下
       fp.next = fieldHash[hashPos];
       fieldHash[hashPos] = fp;
+
       totalFieldCount++;
 
       // At most 50% load factor:
       if (totalFieldCount >= fieldHash.length/2) {
         rehash();
       }
-
-      // 扩容
+      // 扩容,　拷贝一下
       if (totalFieldCount > fields.length) {
         PerField[] newFields = new PerField[ArrayUtil.oversize(totalFieldCount, RamUsageEstimator.NUM_BYTES_OBJECT_REF)];
         System.arraycopy(fields, 0, newFields, 0, fields.length);
@@ -798,6 +832,7 @@ final class DefaultIndexingChain extends DocConsumer {
       }
 
     } else if (invert && fp.invertState == null) {
+      // 内存里已经有缓存这个fp了。所以我们直接设置下索引选项就好了
       initIndexOptions(fp.fieldInfo, fieldType.indexOptions());
       fp.setInvertState();
     }
@@ -812,6 +847,7 @@ final class DefaultIndexingChain extends DocConsumer {
     // This is the first time we are seeing this field indexed, so we now
     // record the index options so that any future attempt to (illegally)
     // change the index options of this field, will throw an IllegalArgExc:
+    // 给这个域设置索引选项
     fieldInfos.globalFieldNumbers.setIndexOptions(info.number, info.name, indexOptions);
     info.setIndexOptions(indexOptions);
   }
@@ -838,7 +874,7 @@ final class DefaultIndexingChain extends DocConsumer {
     // 不认识
     final Similarity similarity;
 
-    // Field翻转什么万一啊
+    // Field翻转什么
     FieldInvertState invertState;
     // 不认识
     TermsHashPerField termsHashPerField;
@@ -854,7 +890,7 @@ final class DefaultIndexingChain extends DocConsumer {
 
     /** We use this to know when a PerField is seen for the
      *  first time in the current document. */
-
+    // 初始值是-1
     long fieldGen = -1;
 
     // Used by the hash table
@@ -924,8 +960,10 @@ final class DefaultIndexingChain extends DocConsumer {
      *  if this is the first time we are seeing this field
      *  name in this document. */
     // 翻转是指变成倒排的意思么？？？？？
+    // 我先不看，　嘻嘻
     public void invert(int docID, IndexableField field, boolean first) throws IOException {
       if (first) {
+        // 我们在这个文档中，第一次索引到这个field的时候, 先reset 复位。
         // First time we're seeing this field (indexed) in
         // this document:
         invertState.reset();
@@ -933,21 +971,27 @@ final class DefaultIndexingChain extends DocConsumer {
 
       IndexableFieldType fieldType = field.fieldType();
 
+      // 设置下索引选项，之后会check，不符合条件就挂了
       IndexOptions indexOptions = fieldType.indexOptions();
       fieldInfo.setIndexOptions(indexOptions);
 
+      // 是否不需要归一化
       if (fieldType.omitNorms()) {
         fieldInfo.setOmitsNorms();
       }
 
+      // 是否分词
       final boolean analyzed = fieldType.tokenized() && analyzer != null;
         
       /*
        * To assist people in tracking down problems in analysis components, we wish to write the field name to the infostream
        * when we fail. We expect some caller to eventually deal with the real exception, so we don't want any 'catch' clauses,
        * but rather a finally that takes note of the problem.
+       * // 为了帮助人们追踪分词组件中的问题，　我们希望当失败的时候，　把fieldName写入infostream.
+       * 我们希望调用方实际的处理异常，所以我们不写任何的catch语句
+       * 但是在最后还是要注意这个问题。
        */
-      boolean succeededInProcessingField = false;
+      boolean succeededInProcessingField = false; // 处理field是否成功
       try (TokenStream stream = tokenStream = field.tokenStream(analyzer, tokenStream)) {
         // reset the TokenStream to the first token
         stream.reset();

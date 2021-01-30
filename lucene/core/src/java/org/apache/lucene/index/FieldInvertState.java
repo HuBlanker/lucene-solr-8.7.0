@@ -31,7 +31,7 @@ import org.apache.lucene.util.AttributeSource;
  *
  * <br/>
  *
- * 此类跟踪要添加到索引中的术语的数量和位置/偏移参数。
+ * 此类跟踪要添加到索引中的term的数量和位置/偏移参数。
  *
  * <br/>
  *

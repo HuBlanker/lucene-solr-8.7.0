@@ -37,6 +37,14 @@ import org.apache.lucene.analysis.TokenStream; // for javadocs
  * the {@link #addAttribute(Class)}, which then checks if an instance of
  * that type is already present. If yes, it returns the instance, otherwise
  * it creates a new instance and returns it.
+ *
+ * <br/>
+ * 一个`AttributeSource`包括了一个不同的｀AttributeImpl`列表。同时提供了添加和获取他们的方法。
+ * <br/>
+ * 同一个`AttributeSource`中的一个｀attribute`应该是个单例。
+ * <br/>
+ * 。这是通过将属性的实际类型（Class <Attribute>）传递给addAttribute（Class）来确保的，
+ * 该属性然后检查该类型的实例是否已经存在。如果是，它将返回该实例，否则将创建一个新实例并返回它。
  */
 public class AttributeSource {
   
@@ -66,8 +74,11 @@ public class AttributeSource {
   // So they are private, final and read-only from the outside (read-only iterators)
   private final Map<Class<? extends Attribute>, AttributeImpl> attributes;
   private final Map<Class<? extends AttributeImpl>, AttributeImpl> attributeImpls;
+
+  // 当前AttributeSource的状态
   private final State[] currentState;
 
+  //　工厂
   private final AttributeFactory factory;
   
   /**
@@ -79,6 +90,7 @@ public class AttributeSource {
   
   /**
    * An AttributeSource that uses the same attributes as the supplied one.
+   * // 约等于copy
    */
   public AttributeSource(AttributeSource input) {
     Objects.requireNonNull(input, "input AttributeSource must not be null");
@@ -90,6 +102,7 @@ public class AttributeSource {
   
   /**
    * An AttributeSource using the supplied {@link AttributeFactory} for creating new {@link Attribute} instances.
+   * // 新的类，使用给的工厂方法来新建Attribute
    */
   public AttributeSource(AttributeFactory factory) {
     this.attributes = new LinkedHashMap<>();

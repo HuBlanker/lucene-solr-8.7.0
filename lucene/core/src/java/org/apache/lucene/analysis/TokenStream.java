@@ -78,6 +78,15 @@ import org.apache.lucene.util.AttributeSource;
  * Therefore all non-abstract subclasses must be final or have at least a final
  * implementation of {@link #incrementToken}! This is checked when Java
  * assertions are enabled.
+ *
+ * <br/>
+ * TokenStream罗列token的序列。从一个doc的fields中或者从查询的query文本中。
+ *
+ * <br/>
+ * 这是一个抽象类，具体的实现类：
+ * 1. Tokenizer, 输入为Reader.
+ * 2. TokenFilter, 输入为另外一个TokenStream.
+ *
  */
 public abstract class TokenStream extends AttributeSource implements Closeable {
   
