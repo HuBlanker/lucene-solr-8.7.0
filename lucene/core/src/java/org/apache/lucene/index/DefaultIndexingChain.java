@@ -758,7 +758,9 @@ final class DefaultIndexingChain extends DocConsumer {
   private PerField getOrAddField(String name, IndexableFieldType fieldType, boolean invert) {
 
     // Make sure we have a PerField allocated
+    // hashPosition , 与1取与, 奇偶数
     final int hashPos = name.hashCode() & hashMask;
+    // 就两个...
     PerField fp = fieldHash[hashPos];
     while (fp != null && !fp.fieldInfo.name.equals(name)) {
       fp = fp.next;
@@ -766,12 +768,15 @@ final class DefaultIndexingChain extends DocConsumer {
 
     if (fp == null) {
       // First time we are seeing this field in this segment
+      // 拿不到, 意味着当前分片中我们第一次见这个Field
 
+      // 一个初始值, 除了名字和number是对的, 其他都是默认值
       FieldInfo fi = fieldInfos.getOrAdd(name);
+      // set indexoptions
       initIndexOptions(fi, fieldType.indexOptions());
       Map<String, String> attributes = fieldType.getAttributes();
       if (attributes != null) {
-        attributes.forEach((k, v) -> fi.putAttribute(k, v));
+        attributes.forEach(fi::putAttribute);
       }
 
       fp = new PerField(indexCreatedVersionMajor, fi, invert,
@@ -785,6 +790,7 @@ final class DefaultIndexingChain extends DocConsumer {
         rehash();
       }
 
+      // 扩容
       if (totalFieldCount > fields.length) {
         PerField[] newFields = new PerField[ArrayUtil.oversize(totalFieldCount, RamUsageEstimator.NUM_BYTES_OBJECT_REF)];
         System.arraycopy(fields, 0, newFields, 0, fields.length);
