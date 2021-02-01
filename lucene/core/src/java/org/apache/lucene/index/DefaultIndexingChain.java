@@ -92,6 +92,7 @@ final class DefaultIndexingChain extends DocConsumer {
   private final int indexCreatedVersionMajor;
   private final Consumer<Throwable> abortingExceptionConsumer;
   private boolean hasHitAbortingException;
+  private DocValuesType dvType;
 
   DefaultIndexingChain(int indexCreatedVersionMajor, SegmentInfo segmentInfo, Directory directory, FieldInfos.Builder fieldInfos, LiveIndexWriterConfig indexWriterConfig,
                        Consumer<Throwable> abortingExceptionConsumer) {

@@ -55,6 +55,12 @@ import org.apache.lucene.util.packed.PackedInts;
  *
  * @see Lucene50SkipWriter for details about skipping setting and postings layout.
  * @lucene.experimental
+ *
+ * 写入倒排格式的docId列表的具体实现类.
+ *
+ * <br/>
+ * 每一个term的倒排表将分别存储.
+ *
  */
 public final class Lucene50PostingsWriter extends PushPostingsWriterBase {
 
@@ -107,14 +113,18 @@ public final class Lucene50PostingsWriter extends PushPostingsWriterBase {
   public Lucene50PostingsWriter(SegmentWriteState state) throws IOException {
     final float acceptableOverheadRatio = PackedInts.COMPACT;
 
+    // .doc file create
     String docFileName = IndexFileNames.segmentFileName(state.segmentInfo.name, state.segmentSuffix, Lucene50PostingsFormat.DOC_EXTENSION);
     docOut = state.directory.createOutput(docFileName, state.context);
+
     IndexOutput posOut = null;
     IndexOutput payOut = null;
     boolean success = false;
     try {
+      // 写入一个header.
       CodecUtil.writeIndexHeader(docOut, DOC_CODEC, VERSION_CURRENT, 
                                    state.segmentInfo.getId(), state.segmentSuffix);
+      // forUtil是干啥的
       forUtil = new ForUtil(acceptableOverheadRatio, docOut);
       if (state.fieldInfos.hasProx()) {
         posDeltaBuffer = new int[MAX_DATA_SIZE];
