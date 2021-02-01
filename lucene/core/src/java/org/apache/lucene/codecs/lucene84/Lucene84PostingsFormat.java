@@ -346,6 +346,72 @@ import org.apache.lucene.util.packed.PackedInts;
  * </ul>
  * </dd>
  * </dl>
+ * <br/>
+ * lucene 5.0　的倒排表格式，将倒排表以<B>Packed Int blocks</B>的方式编码，为了更快的解码.
+ * <br/>
+ * 基本理念：
+ * <br/>
+ * <ul>
+ *   <li>
+ *     <b>Packed Blocks (打包的块) 和　Vint Blocks (变长int块）</b>
+ *     <p>在Packed Blocks中，int被以相同的bit宽度进行编码，块的大小(比如块内的int数量)是固定的(当前是128).
+ *     此外，全是相同值的块以另外一种优化的方法来编码。</p>
+ *     <p> 在变长int块中，整数被编码为变长int, 块的大小是可变化的。</p>
+ *   </li>
+ *   <li>
+ *     <b> 块的结构</b>
+ *     <p> 当倒排表足够长，　这个类尽量用`Packed block`的方式编码更多的整数数据。</p>
+ *     <p> 举个例子，一个词有259个文档，那么前面256个文档ID将被编码成两个`packed block`. 剩下的３个整数被编码成一个`Vint Block`.</p>
+ *     <p> 不同类型的数据始终分别编码为不同的打包块，但可能会交错到同一VInt块中。</p>
+ *     <p> 此策略适用于以下对：
+ *
+ *      &lt;文档编号, 频率&gt;,
+ *      &lt;位置, 有效负载长度&gt;,
+ *      &lt;位置, 偏移起始位置, 偏移长度&gt;, 和
+ *      &lt;位置, 有效负载长度, 偏移起始位置, 偏移长度&gt;.</p>
+ *   </li>
+ *   <li>
+ *     <b> 跳表　设置</b>
+ *     <p> 跳表的结构　和以前版本的lucene差不多。跳跃的间隔和块的大小一样，　每一个跳跃的节点是每一个块的开始。然而，第一个块，跳跃数据被省略了。</p>
+ *   </li>
+ *   <li>
+ *     <b>位置，有效负载，　偏移量</b>
+ *     <p> 位置：　代表着词在文档中的哪里命中了文档.
+ *         有效负载，　是一块元数据，关联到当前的位置。
+ *         偏移量：是一对整数，代表了给定词在当前位置的开始及结束偏移量。实际上是一个专用的有效负载。</p>
+ *     <p> 当有效负载和偏移量没有被省略掉，　位置数量＝有效负载数量＝偏移量数量（假设有限负载为空，则计数为１）,
+ *     就像在`块结构`中说的，这三个数据可以被分开或者合并起来编码。</p>
+ *     <p> 在所有的情况中，有效负载和偏移量存储在一起。　
+ *     当编码为一个打包块时，位置数据使用.pos文件分开存储，而有效负载和偏移量存储在.pay.
+ *     当使用变长int编码，这三个数据存储在一起，在.pos文件中(有效负载数据也在)</p>
+ *     <p> 在这个策略下，大部分有效负载和偏移数据都在.pos文件外面。因此，对于只需要位置数据的查询，该查询在带有有效负载和偏移量的完整索引上运行，
+ *     这会减少磁盘的预读取。</p>
+ *   </li>
+ * </ul>
+ * <br/>
+ * 文件和详细的格式
+ * <ul>
+ *   <li><tt>.tim</tt>: <a href="#Termdictionary">Term Dictionary</a></li>
+ *   <li><tt>.tip</tt>: <a href="#Termindex">Term Index</a></li>
+ *   <li><tt>.doc</tt>: <a href="#Frequencies">Frequencies and Skip Data</a></li>
+ *   <li><tt>.pos</tt>: <a href="#Positions">Positions</a></li>
+ *   <li><tt>.pay</tt>: <a href="#Payloads">Payloads and Offsets</a></li>
+ * </ul>
+ *
+ * <br/>
+ * <b> term Dictionary (term的词典？词的词典？)</b>
+ * <p> .tim文件包含每个域中的所有词的列表，　以及每一个词的统计信息(比如文档频率). 以及指向与频率，位置，有效负载和跳表的数据在.doc,.pos,.
+ * pay等文件。格式的更加详细的信息在｀BlockTreeTermsWriter`</p>
+ * <p> 提示：term词典可以有多种实现，倒排表的读写者实际上负责去编码解码`PostingHeader`和`TermMetaData`部分。</p>
+ * <ul>
+ *   <li>PositionsHeader --> 文件头，打包块的大小</li>
+ *   <li>TermMetaDara --> (DocFPDelta|SingletonDocID), PosFPDelta?, PosVIntBlockFPDelta?, PayFPDelta?, SkipFPDelta?, 一堆偏移量之类的东西，看不懂</li>
+ *   <li> Header --> 索引文件头</li>
+ *   <li> PackedBlockSize, SingleDocId --> 变长int</li>
+ *   <li> DocFPDelta, PosFPDelta, PayFPDelta, PosVintBlockFpDelta, SkipFPDelta --> 变长的long</li>
+ *   <li> Footer: 编码器的脚部【</li>
+ * </ul>
+ *
  *
  * @lucene.experimental
  */
