@@ -411,6 +411,30 @@ import org.apache.lucene.util.packed.PackedInts;
  *   <li> DocFPDelta, PosFPDelta, PayFPDelta, PosVintBlockFpDelta, SkipFPDelta --> 变长的long</li>
  *   <li> Footer: 编码器的脚部【</li>
  * </ul>
+ * <b> 提示:</b>
+ * <ul>
+ *   <li><b>Header:</b> 存储了倒排表的版本信息之类的</li>
+ *   <li><b>PackedBlockSize</b> 打包块的固定大小. 在打包块中,bit宽度由最大的整数决定.
+ *   较小的块大小, 导致整数之间宽度差异较小, 因此索引较小. 较大的块大小, 可以有更加高效的批量io,因此速度更好.</li>
+ *   <li> <b>DocFPDelta</b> 确定了这个词在.doc文件中的词频的位置.
+ *   特别是，这一项的数据与前一项的数据之间的文件偏移量之差（对于块中的第一项为零），在磁盘上按顺序存储为与前一项值的差。</li>
+ *   <li><b> PosFPDelta</b> 确定了这个词在.pos文件中的词位置的位置.
+ *   PayFPDelta则确定了这个词的词负载及词偏移在.pay文件中的位置.
+ *   就像DocFPDelta一样,他是两个文件位置之间的差值.(或者对于会略payloads和offset的域,这个值会被忽略掉).
+ *   </li>
+ *   <li><b>POsVIntBlockFPDelta</b>
+ *   <P>定义了pos文件中, 这个词在最后一个打包块中的最后一个词位置.
+ *    PayVIntBlockFPDelta or OffsetVIntBlockFPDelta 是一样的含义.
+ *    者经常用于表名需要从.pos文件加载基础负载和偏移量,而不是.pay文件.
+ *    每次加载一个位置的新块时, 倒排表读取器会使用这个值检查当前块是打包编码还是变长整数编码.
+ *    如果是打包编码, 基础负载和偏移量将从.pay文件加载,否则从.pos文件加载.
+ *    这个值将被忽略, 如果位置的总数少于或者等于打包块的大小.
+ *    </P></li>
+ *    <li><b>SkipFPDelta</b>< 确定了这个词的跳跃数据在.doc文件中的. 特殊的是, 他是词频数据的长度.
+ *    `SkipDelta`只有在词频数据不比最小跳跃数据小的时候存储.(在当前类中,这个数据是128)/li>
+ *    <li><SingletonDocID: 是当一个词只在一个doc中出现的时候的一个优化, 在这种情况下,
+ *    就别打文件指针了, 直接把这个id写成一个变长的int块就好了.</li>
+ * </ul>
  *
  *
  * @lucene.experimental
