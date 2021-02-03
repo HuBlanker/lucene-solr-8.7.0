@@ -88,16 +88,18 @@ import org.apache.lucene.util.fst.Util;
 
 /**
  * Block-based terms index and dictionary writer.
+ * 以块为基础的，词的索引和字典写入类.
  * <p>
  * Writes terms dict and index, block-encoding (column
  * stride) each term's metadata for each set of terms
  * between two index terms.
  * <p>
+ * <p>写入词字典和索引，块编码（列存储？？？) 两个索引词之间的所有词的元数据进行块编码 </p>
  *
  * Files:
  * <ul>
- *   <li><tt>.tim</tt>: <a href="#Termdictionary">Term Dictionary</a></li>
- *   <li><tt>.tip</tt>: <a href="#Termindex">Term Index</a></li>
+ *   <li><tt>.tim</tt>: <a href="#Termdictionary">Term Dictionary</a> <p> 所有的词，这是个词典</p></li>
+ *   <li><tt>.tip</tt>: <a href="#Termindex">Term Index</a> <词的索引> </词的索引></li>
  * </ul>
  * <p>
  * <a name="Termdictionary"></a>
@@ -108,16 +110,20 @@ import org.apache.lucene.util.fst.Util;
  * and per-term metadata (typically pointers to the postings list
  * for that term in the inverted index).
  * </p>
+ * <p> .tim文件包含了：　每一个域中的所有词以及每个词的统计信息(比如doc频率) 和每一个词的元数据(通常是指向这个词在倒排索引中的倒排表的指针)</p>
  *
  * <p>The .tim is arranged in blocks: with blocks containing
  * a variable number of entries (by default 25-48), where
  * each entry is either a term or a reference to a
  * sub-block.</p>
  *
+ * <p> .tim 文件按照来组织，　块中包含变长的条目，通常是25-48个。每一个条目是一个term或者一个子块的参考指向</p>
+ *
  * <p>NOTE: The term dictionary can plug into different postings implementations:
  * the postings writer/reader are actually responsible for encoding 
  * and decoding the Postings Metadata and Term Metadata sections.</p>
  *
+ * <p> NOTE: 词字典可以插入到不同的倒排表实现中。倒排表的读取方和写入方是实际上负责编码、解码倒排表元数据和词的元数据的</p>
  * <ul>
  *    <li>TermsDict (.tim) --&gt; Header, <i>PostingsHeader</i>, NodeBlock<sup>NumBlocks</sup>,
  *                               FieldSummary, DirOffset, Footer</li>
@@ -136,28 +142,42 @@ import org.apache.lucene.util.fst.Util;
  *        {@link DataOutput#writeVLong VLong}</li>
  *    <li>Footer --&gt; {@link CodecUtil#writeFooter CodecFooter}</li>
  * </ul>
+ * <p> 同样的，上面的内容不翻译了，　当我真正要用的时候，我再回来一一对照。</p>
  * <p>Notes:</p>
  * <ul>
  *    <li>Header is a {@link CodecUtil#writeHeader CodecHeader} storing the version information
  *        for the BlockTree implementation.</li>
+ *        <li> Header　是一个编码器的文件头，存储了版本信息。</li>
  *    <li>DirOffset is a pointer to the FieldSummary section.</li>
+ *    <li> DirOffset 是一个指向域摘要部分的指针</li>
  *    <li>DocFreq is the count of documents which contain the term.</li>
+ *    <li> DocFreq 是包含这个词的文档数据</li>
  *    <li>TotalTermFreq is the total number of occurrences of the term. This is encoded
  *        as the difference between the total number of occurrences and the DocFreq.</li>
+ *    <li> TotalTermFreq 是这个词出现的总数，这个数值存储为出现的总数和包含他的文档总数的差值。</li>
  *    <li>FieldNumber is the fields number from {@link FieldInfos}. (.fnm)</li>
+ *    <li> FieldNumber 是.fnm文件中　的数值，也就是所有的域的数量</li>
  *    <li>NumTerms is the number of unique terms for the field.</li>
+ *    <li> NumTerms 是域的唯一的词的数量</li>
  *    <li>RootCode points to the root block for the field.</li>
+ *    <li> RootCode 指向这个域的块的根基块</li>
  *    <li>SumDocFreq is the total number of postings, the number of term-document pairs across
  *        the entire field.</li>
+ *    <li> SumDocFreq 是倒排表的总数，　是给定域中，词－文档对的总数</li>
  *    <li>DocCount is the number of documents that have at least one posting for this field.</li>
+ *    <li> DocCount 是在这个域中至少有一个值的文档的数量</li>
  *    <li>LongsSize records how many long values the postings writer/reader record per term
  *        (e.g., to hold freq/prox/doc file offsets).
+ *    <li> LongsSize 记录了每个词的倒排读写了多少个long值</li>
  *    <li>MinTerm, MaxTerm are the lowest and highest term in this field.</li>
+ *    <li>minTerm,maxTerm 是这个域最小的和最大的词</li>
  *    <li>PostingsHeader and TermMetadata are plugged into by the specific postings implementation:
  *        these contain arbitrary per-file data (such as parameters or versioning information) 
  *        and per-term data (such as pointers to inverted files).</li>
+ *    <li>倒排头和TermMetadata 根据不同的倒排表实现写入，他们包含了每个文件的数据和每个ｔｅｒｍ的数据</li>
  *    <li>For inner nodes of the tree, every entry will steal one bit to mark whether it points
  *        to child nodes(sub-block). If so, the corresponding TermStats and TermMetaData are omitted </li>
+ *    <li>对于树的内部节点，每个条目将窃取一位以标记其是否指向到子节点（子块）。如果是这样，则省略相应的TermStats和TermMetaData</li>
  * </ul>
  * <a name="Termindex"></a>
  * <h3>Term Index</h3>
@@ -174,6 +194,7 @@ import org.apache.lucene.util.fst.Util;
  *   <li>FSTIndex --&gt; {@link FST FST&lt;byte[]&gt;}</li>
  *   <li>Footer --&gt; {@link CodecUtil#writeFooter CodecFooter}</li>
  * </ul>
+ * <p> 同样的，上面的内容不翻译了，　当我真正要用的时候，我再回来一一对照。</p>
  * <p>Notes:</p>
  * <ul>
  *   <li>The .tip file contains a separate FST for each
