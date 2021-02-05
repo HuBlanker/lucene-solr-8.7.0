@@ -85,6 +85,7 @@ public final class BlockTreeTermsReader extends FieldsProducer {
   static final int OUTPUT_FLAG_HAS_TERMS = 0x2;
 
   /** Extension of terms file */
+  // Term Dictionary 存储所有词的字典
   static final String TERMS_EXTENSION = "tim";
   final static String TERMS_CODEC_NAME = "BlockTreeTermsDict";
 

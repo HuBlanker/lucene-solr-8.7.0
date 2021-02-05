@@ -202,15 +202,19 @@ import org.apache.lucene.util.fst.Util;
  *       block that holds all terms starting with that
  *       prefix.  Each field's IndexStartFP points to its
  *       FST.</li>
+ *   <li>.tip 文件包含每个域的FST. FST映射了　一个词前缀到一个磁盘上的块，　这个快里存储了所有以该前缀开始的词。 每个域的IndexStartFP指向他的FST</li>
  *   <li>DirOffset is a pointer to the start of the IndexStartFPs
  *       for all fields</li>
+ *   <li>DirOffset 是一个所有域的IndexStartFPs的指针</li>
  *   <li>It's possible that an on-disk block would contain
  *       too many terms (more than the allowed maximum
  *       (default: 48)).  When this happens, the block is
  *       sub-divided into new blocks (called "floor
  *       blocks"), and then the output in the FST for the
  *       block's prefix encodes the leading byte of each
- *       sub-block, and its file pointer.
+ *       sub-block, and its file pointer. </li>
+ *   <li> 磁盘上的块可能包含太多的词。这种情况下，这个快被分到新的块中去，新的快叫做floor blocks.
+ *   fst的输出中编码了每一个子块的开始字节以及他的文件指针。</li>
  * </ul>
  *
  * @see BlockTreeTermsReader
@@ -220,12 +224,16 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
 
   /** Suggested default value for the {@code
    *  minItemsInBlock} parameter to {@link
-   *  #BlockTreeTermsWriter(SegmentWriteState,PostingsWriterBase,int,int)}. */
+   *  #BlockTreeTermsWriter(SegmentWriteState,PostingsWriterBase,int,int)}.
+   *  块的size的最小值
+   */
   public final static int DEFAULT_MIN_BLOCK_SIZE = 25;
 
   /** Suggested default value for the {@code
    *  maxItemsInBlock} parameter to {@link
-   *  #BlockTreeTermsWriter(SegmentWriteState,PostingsWriterBase,int,int)}. */
+   *  #BlockTreeTermsWriter(SegmentWriteState,PostingsWriterBase,int,int)}.
+   *  块的size的最大值
+   */
   public final static int DEFAULT_MAX_BLOCK_SIZE = 48;
 
   //public static boolean DEBUG = false;
@@ -234,56 +242,76 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
   //private final static boolean SAVE_DOT_FILES = false;
 
   private final IndexOutput metaOut;
+  // term Dictionary
   private final IndexOutput termsOut;
   private final IndexOutput indexOut;
   final int maxDoc;
+  // 一个块里最小最大的item数量，用的就是自己定义的上面的25,48
   final int minItemsInBlock;
   final int maxItemsInBlock;
 
+  // 倒排表写入的基类
   final PostingsWriterBase postingsWriter;
+  // 类信息，学习过咯，没忘呢
   final FieldInfos fieldInfos;
 
+  // 这是什么玩意
   private final List<ByteBuffersDataOutput> fields = new ArrayList<>();
 
   /** Create a new writer.  The number of items (terms or
    *  sub-blocks) per block will aim to be between
    *  minItemsPerBlock and maxItemsPerBlock, though in some
-   *  cases the blocks may be smaller than the min. */
+   *  cases the blocks may be smaller than the min.
+   *  每个块/子块中的item数量尽量控制在给定范围内，但是有时候会小一点
+   *  */
   public BlockTreeTermsWriter(SegmentWriteState state,
                               PostingsWriterBase postingsWriter,
                               int minItemsInBlock,
                               int maxItemsInBlock)
     throws IOException
   {
+    // 验证入参
     validateSettings(minItemsInBlock,
                      maxItemsInBlock);
 
     this.minItemsInBlock = minItemsInBlock;
     this.maxItemsInBlock = maxItemsInBlock;
 
+    // 当前segment的最大docID.
     this.maxDoc = state.segmentInfo.maxDoc();
+
+    // fields信息
     this.fieldInfos = state.fieldInfos;
+    // 倒排写入？？
     this.postingsWriter = postingsWriter;
 
+    // term Dictionary
     final String termsName = IndexFileNames.segmentFileName(state.segmentInfo.name, state.segmentSuffix, BlockTreeTermsReader.TERMS_EXTENSION);
     termsOut = state.directory.createOutput(termsName, state.context);
+
     boolean success = false;
     IndexOutput metaOut = null, indexOut = null;
     try {
+      // tim header
       CodecUtil.writeIndexHeader(termsOut, BlockTreeTermsReader.TERMS_CODEC_NAME, BlockTreeTermsReader.VERSION_CURRENT,
                                  state.segmentInfo.getId(), state.segmentSuffix);
 
+      // tip name and Header
+      // term的索引文件，起名叫tip, 不知道为啥
       final String indexName = IndexFileNames.segmentFileName(state.segmentInfo.name, state.segmentSuffix, BlockTreeTermsReader.TERMS_INDEX_EXTENSION);
       indexOut = state.directory.createOutput(indexName, state.context);
       CodecUtil.writeIndexHeader(indexOut, BlockTreeTermsReader.TERMS_INDEX_CODEC_NAME, BlockTreeTermsReader.VERSION_CURRENT,
                                  state.segmentInfo.getId(), state.segmentSuffix);
       //segment = state.segmentInfo.name;
 
+      // tmd name Header
+      // 元数据文件，起名叫tmd，也是不知道为啥
       final String metaName = IndexFileNames.segmentFileName(state.segmentInfo.name, state.segmentSuffix, BlockTreeTermsReader.TERMS_META_EXTENSION);
       metaOut = state.directory.createOutput(metaName, state.context);
       CodecUtil.writeIndexHeader(metaOut, BlockTreeTermsReader.TERMS_META_CODEC_NAME, BlockTreeTermsReader.VERSION_CURRENT,
           state.segmentInfo.getId(), state.segmentSuffix);
 
+      // init
       postingsWriter.init(metaOut, state);                          // have consumer write its format/header
 
       this.metaOut = metaOut;
