@@ -44,7 +44,7 @@ public class HuYanTestIndexWriter extends LuceneTestCase {
 
   static void addDoc(IndexWriter writer, int i) throws IOException {
     Document doc = new Document();
-    doc.add(newTextField("content", "aaa" + i, Field.Store.YES));
+    doc.add(newTextField("content", "test index" + i, Field.Store.YES));
     writer.addDocument(doc);
   }
 }

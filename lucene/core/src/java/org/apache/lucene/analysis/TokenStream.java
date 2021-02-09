@@ -86,6 +86,9 @@ import org.apache.lucene.util.AttributeSource;
  * 这是一个抽象类，具体的实现类：
  * 1. Tokenizer, 输入为Reader.
  * 2. TokenFilter, 输入为另外一个TokenStream.
+ * <br/>
+ *
+ * 反正，这个类，是一个流。　是从一段文本(可能是field信息，也可以是输入的query)变成token的流。
  *
  */
 public abstract class TokenStream extends AttributeSource implements Closeable {
@@ -154,8 +157,22 @@ public abstract class TokenStream extends AttributeSource implements Closeable {
    * the attributes must be added during instantiation. Filters and consumers
    * are not required to check for availability of attributes in
    * {@link #incrementToken()}.
-   * 
+   *
    * @return false for end of stream; true otherwise
+   *
+   * <br/>
+   * 消费者们用这个方法让流走到下一个token. 实现类必须实现这个方法然后更新下一个token的属性.
+   *
+   * <br/>
+   * 返回方法后，生产者不得对属性做任何假设：调用者可以任意更改它。如果生产者需要保留该状态以用于后续调用，则可以使用captureState创建当前属性状态的副本。
+   *
+   * <br/>
+   *
+   * 对于这个文档的所有token都会调用这个方法，因此一个高效的实现对良好的性能至关重要。
+   * 为了避免调用`addAttribute,getAttribute`. 在实例化期间，这个流用到的所有属性的引用，都应该被取回来。
+   *
+   * <br/>
+   * 为了确保过滤器和消费者知道哪些属性可用，实例化期间必须添加所有的属性。　不需要过滤器和消费者检查这个方法中的属性可用性。
    */
   public abstract boolean incrementToken() throws IOException;
   

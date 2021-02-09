@@ -540,7 +540,7 @@ final class DefaultIndexingChain extends DocConsumer {
 
     PerField fp = null;
 
-    // 索引选项，可以制定都要索引哪些内容
+    // 索引选项，可以指定都要索引哪些内容
     if (fieldType.indexOptions() == null) {
       throw new NullPointerException("IndexOptions must not be null (field: \"" + field.name() + "\")");
     }
@@ -552,7 +552,7 @@ final class DefaultIndexingChain extends DocConsumer {
       // 只要fp.fieldGen=-1,就会为真，此时意味着这个field是所有文档中的第一次出现,那肯定是first了。此时fieldGen是文档编号
       // 假设fp.fieldGen=2,从第二个文档开始就没见过了,fieldGen=10, 就会为真，此时意味着这个field是<当前文档>中的第一次出现,那肯定是first了。此时fieldGen是文档编号
       boolean first = fp.fieldGen != fieldGen;
-      // 把倒排内容搞起来, 我先不看
+      // 把倒排内容搞起来, 开始看了
       fp.invert(docID, field, first);
 
       if (first) {
@@ -588,7 +588,7 @@ final class DefaultIndexingChain extends DocConsumer {
       }
     }
 
-    // 处理docValue，处理完就完事了
+    // 处理docValue，第二份正排,准确的说是，一个列存储的正排
     DocValuesType dvType = fieldType.docValuesType();
     if (dvType == null) {
       throw new NullPointerException("docValuesType must not be null (field: \"" + fieldName + "\")");
@@ -875,7 +875,7 @@ final class DefaultIndexingChain extends DocConsumer {
     // 不认识
     final Similarity similarity;
 
-    // Field翻转什么
+    // Field 倒排时候的中间状态
     FieldInvertState invertState;
     // 不认识
     TermsHashPerField termsHashPerField;
@@ -907,7 +907,7 @@ final class DefaultIndexingChain extends DocConsumer {
     TokenStream tokenStream;
     // 不认识
     private final InfoStream infoStream;
-    // 分词器
+    // 分词器, 初始化配置的时候需要指定一个
     private final Analyzer analyzer;
 
     PerField(int indexCreatedVersionMajor, FieldInfo fieldInfo, boolean invert, Similarity similarity, InfoStream infoStream, Analyzer analyzer) {
@@ -960,8 +960,8 @@ final class DefaultIndexingChain extends DocConsumer {
     /** Inverts one field for one document; first is true
      *  if this is the first time we are seeing this field
      *  name in this document. */
-    // 翻转是指变成倒排的意思么？？？？？
-    // 我先不看，　嘻嘻
+    // 搞倒排
+    // field = Field.class
     public void invert(int docID, IndexableField field, boolean first) throws IOException {
       if (first) {
         // 我们在这个文档中，第一次索引到这个field的时候, 先reset 复位。
@@ -993,12 +993,20 @@ final class DefaultIndexingChain extends DocConsumer {
        * 但是在最后还是要注意这个问题。
        */
       boolean succeededInProcessingField = false; // 处理field是否成功
+      // 从当前field中获取一个流，这个流可以不断的拿东西，所以可以for循环，流最后需要关闭
       try (TokenStream stream = tokenStream = field.tokenStream(analyzer, tokenStream)) {
         // reset the TokenStream to the first token
         stream.reset();
+        // 确保inverState 中的是这个stream. 而这个stream刚刚reset过。所以这里是空的,
+        // 这里相当与把当前的tokenStream直接引用了一份给到了invertState. 那么当tokenStream进行incr时，　中间状态也就变了，因为他持有的是别人的引用
         invertState.setAttributeSource(stream);
+        // 不知道在走啊
         termsHashPerField.start(field, first);
 
+        // 上面说的for循环，其实就是stream的使用方式而已
+        // 这里的stream是一个装饰器
+        // stream = StopFilter -> LowCase -> StandardTokenizer.
+        // 就是还有下一个的意思
         while (stream.incrementToken()) {
 
           // If we hit an exception in stream.next below
@@ -1007,9 +1015,16 @@ final class DefaultIndexingChain extends DocConsumer {
           // non-aborting and (above) this one document
           // will be marked as deleted, but still
           // consume a docID
+          // 所以这里是，每一个域的每一个token都会来一次。
 
+          // PackedTokenAttributeImpl
+          // term 在文档/field中的位置，那么第一次进来，这个值肯定是1. 因此你分词也要讲究基本法，第一个就是１．
           int posIncr = invertState.posIncrAttribute.getPositionIncrement();
+          // 倒排状态的位置
+          // 初始化为-1
           invertState.position += posIncr;
+
+          // 这里是对位置的检查
           if (invertState.position < invertState.lastPosition) {
             if (posIncr == 0) {
               throw new IllegalArgumentException("first position increment must be > 0 (got 0) for field '" + field.name() + "'");
@@ -1021,6 +1036,7 @@ final class DefaultIndexingChain extends DocConsumer {
           } else if (invertState.position > IndexWriter.MAX_POSITION) {
             throw new IllegalArgumentException("position " + invertState.position + " is too large for field '" + field.name() + "': max allowed position is " + IndexWriter.MAX_POSITION);
           }
+
           invertState.lastPosition = invertState.position;
           if (posIncr == 0) {
             invertState.numOverlap++;
@@ -1028,6 +1044,7 @@ final class DefaultIndexingChain extends DocConsumer {
               
           int startOffset = invertState.offset + invertState.offsetAttribute.startOffset();
           int endOffset = invertState.offset + invertState.offsetAttribute.endOffset();
+          // 又检查
           if (startOffset < invertState.lastStartOffset || endOffset < startOffset) {
             throw new IllegalArgumentException("startOffset must be non-negative, and endOffset must be >= startOffset, and offsets must not go backwards "
                                                + "startOffset=" + startOffset + ",endOffset=" + endOffset + ",lastStartOffset=" + invertState.lastStartOffset + " for field '" + field.name() + "'");
@@ -1048,9 +1065,12 @@ final class DefaultIndexingChain extends DocConsumer {
           // internal state of the terms hash is now
           // corrupt and should not be flushed to a
           // new segment:
+          // 那么这里就是唯一的重点咯，刚才把一部分状态算出来，给到了倒排状态，现在把他写入或者怎么样
+          // termsHashPerField = FreqProxTermsWriterPerField
           try {
             termsHashPerField.add(invertState.termAttribute.getBytesRef(), docID);
           } catch (MaxBytesLengthExceededException e) {
+            // 相当于回滚逻辑，不看
             byte[] prefix = new byte[30];
             BytesRef bigTerm = invertState.termAttribute.getBytesRef();
             System.arraycopy(bigTerm.bytes, bigTerm.offset, prefix, 0, 30);
@@ -1067,6 +1087,7 @@ final class DefaultIndexingChain extends DocConsumer {
         }
 
         // trigger streams to perform end-of-stream operations
+        // 流里的一项完成
         stream.end();
 
         // TODO: maybe add some safety? then again, it's already checked 

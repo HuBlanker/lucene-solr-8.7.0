@@ -39,6 +39,8 @@ public class StopFilter extends FilteringTokenFilter {
    * @param stopWords
    *          A {@link CharArraySet} representing the stopwords.
    * @see #makeStopSet(java.lang.String...)
+   *
+   * 关于停用词的装饰器
    */
   public StopFilter(TokenStream in, CharArraySet stopWords) {
     super(in);

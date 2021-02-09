@@ -43,6 +43,7 @@ public abstract class FilteringTokenFilter extends TokenFilter {
   /** Override this method and return if the current input token should be returned by {@link #incrementToken}. */
   protected abstract boolean accept() throws IOException;
 
+  // 过滤掉一些东西，　比如子类有一个停用词
   @Override
   public final boolean incrementToken() throws IOException {
     skippedPositions = 0;

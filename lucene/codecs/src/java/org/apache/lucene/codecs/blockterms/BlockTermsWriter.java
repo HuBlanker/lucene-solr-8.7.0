@@ -193,10 +193,15 @@ public class BlockTermsWriter extends FieldsConsumer implements Closeable {
     public BlockTermState state;
   }
 
+  // term的写入器
   class TermsWriter {
+    // 一个域信息
     private final FieldInfo fieldInfo;
+    // 倒排写的
     private final PostingsWriterBase postingsWriter;
+    // 奇怪的指针
     private final long termsStartPointer;
+    // 词的数量?
     private long numTerms;
     private final TermsIndexWriterBase.FieldWriter fieldIndexWriter;
     private final FixedBitSet docsSeen;

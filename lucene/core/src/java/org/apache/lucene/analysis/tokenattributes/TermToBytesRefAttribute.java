@@ -45,6 +45,14 @@ import org.apache.lucene.util.BytesRef;
  * @lucene.internal This is a very expert and internal API, please use
  * {@link CharTermAttribute} and its implementation for UTF-8 terms; to
  * index binary terms, use {@link BytesTermAttribute} and its implementation.
+ *
+ * <br/>
+ *
+ * 词转成BytesRes的属性.
+ *
+ * TermsHashPerField要求这个属性来索引内容。这个属性可以定制化词最终的字节编码。
+ *
+ * 这个属性的消费者，为每一个词，　调用`getBytesRes()`
  */
 public interface TermToBytesRefAttribute extends Attribute {
   

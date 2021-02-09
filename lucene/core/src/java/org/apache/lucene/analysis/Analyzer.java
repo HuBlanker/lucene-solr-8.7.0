@@ -112,6 +112,9 @@ public abstract class Analyzer implements Closeable {
 
   /**
    * Creates a new {@link TokenStreamComponents} instance for this analyzer.
+   *
+   * 每个分词器要自己实现一个自己的tokenStream的组件生成器，类似的。
+   * 我们先学习一下StandandAnalyzer.
    * 
    * @param fieldName
    *          the name of the fields content passed to the
@@ -189,12 +192,16 @@ public abstract class Analyzer implements Closeable {
    * @see #tokenStream(String, Reader)
    */
   public final TokenStream tokenStream(final String fieldName, final String text) {
+    // 拿到冲用的
     TokenStreamComponents components = reuseStrategy.getReusableComponents(this, fieldName);
-    @SuppressWarnings("resource") final ReusableStringReader strReader = 
+    // 这堆策略，为了给同一个field重用同一个分词组件
+    @SuppressWarnings("resource")
+    final ReusableStringReader strReader =
         (components == null || components.reusableStringReader == null) ?
         new ReusableStringReader() : components.reusableStringReader;
     strReader.setValue(text);
     final Reader r = initReader(fieldName, strReader);
+    // 重用为空就新高一个
     if (components == null) {
       components = createComponents(fieldName);
       reuseStrategy.setReusableComponents(this, fieldName, components);
@@ -362,6 +369,7 @@ public abstract class Analyzer implements Closeable {
    * instance of {@link TokenFilter} which also serves as the
    * {@link TokenStream} returned by
    * {@link Analyzer#tokenStream(String, Reader)}.
+   * 封装了一下tokenStream.
    */
   public static final class TokenStreamComponents {
     /**

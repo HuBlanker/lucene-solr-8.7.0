@@ -27,6 +27,12 @@ import org.apache.lucene.codecs.FieldsProducer;
  * This is primarily an internal/experimental API (see {@link FieldsProducer}),
  * although it is also used to expose the set of term vectors per document.
  *
+ * 为具有索引的字段提供术语索引，并列出要执行的字段。尽管它也用于公开每个文档的术语向量集，但这主要是一个内部/实验性API（请参阅FieldsProducer）。
+ *
+ * <br/>
+ *
+ * 一个string的集合
+ *
  * @lucene.experimental
  */
 public abstract class Fields implements Iterable<String> {

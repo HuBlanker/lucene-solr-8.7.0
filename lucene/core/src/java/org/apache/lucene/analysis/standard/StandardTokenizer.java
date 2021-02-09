@@ -34,6 +34,15 @@ import org.apache.lucene.util.AttributeFactory;
  * <p>Many applications have specific tokenizer needs.  If this tokenizer does
  * not suit your application, please consider copying this source code
  * directory to your project and maintaining your own grammar-based tokenizer.
+ * <br/>
+ *
+ * 一个标准化的Tokenizer.
+ * 一个基于语法的分词器。
+ * 这个类从Unicode标准中指定的文本分段算法实现分词规则。
+ * <br/>
+ * 许多的应用程序都有特征的令牌生成器需求，其实真正的很多情况，我们确实不用这个，我们用一些基于中文的分词器，反正最终目的，都是把一段文本，
+ * 转换成一串分词后的token.
+ *
  */
 
 public final class StandardTokenizer extends Tokenizer {

@@ -103,15 +103,18 @@ public final class Lucene84PostingsWriter extends PushPostingsWriterBase {
   /** Creates a postings writer */
   public Lucene84PostingsWriter(SegmentWriteState state) throws IOException {
 
+    // .doc文件
     String docFileName = IndexFileNames.segmentFileName(state.segmentInfo.name, state.segmentSuffix, Lucene84PostingsFormat.DOC_EXTENSION);
     docOut = state.directory.createOutput(docFileName, state.context);
     IndexOutput posOut = null;
     IndexOutput payOut = null;
     boolean success = false;
     try {
+      // 写个Header
       CodecUtil.writeIndexHeader(docOut, DOC_CODEC, VERSION_CURRENT, 
                                    state.segmentInfo.getId(), state.segmentSuffix);
       ByteOrder byteOrder = ByteOrder.nativeOrder();
+      // ByteOrder编码顺序，这个后续细看下，两种有区别的
       if (byteOrder == ByteOrder.BIG_ENDIAN) {
         docOut.writeByte((byte) 'B');
       } else if (byteOrder == ByteOrder.LITTLE_ENDIAN) {
@@ -214,6 +217,7 @@ public final class Lucene84PostingsWriter extends PushPostingsWriterBase {
     competitiveFreqNormAccumulator.clear();
   }
 
+  // 开始一个Doc的写入过程？
   @Override
   public void startDoc(int docID, int termDocFreq) throws IOException {
     // Have collected a block of docs, and get a new doc. 
@@ -232,6 +236,7 @@ public final class Lucene84PostingsWriter extends PushPostingsWriterBase {
     }
 
     docDeltaBuffer[docBufferUpto] = docDelta;
+    // 如果索引类型包含词频
     if (writeFreqs) {
       freqBuffer[docBufferUpto] = termDocFreq;
     }

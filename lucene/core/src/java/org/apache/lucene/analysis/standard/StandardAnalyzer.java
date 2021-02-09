@@ -77,12 +77,16 @@ public final class StandardAnalyzer extends StopwordAnalyzerBase {
     return maxTokenLength;
   }
 
+  // StandardAnalyzer的生成器。
+  // 其实你想想也知道，一个域从text变成token.中间肯定少不了分词器的参与，甚至说是分词器决定的，　那么逻辑肯定在分词器这里。后续都是持有引用而已
   @Override
   protected TokenStreamComponents createComponents(final String fieldName) {
     final StandardTokenizer src = new StandardTokenizer();
     src.setMaxTokenLength(maxTokenLength);
+    // 装饰器模式，给系统实现的标准令牌花，加上了一个小写，加上了一个停用词过滤。然后就返回了。
     TokenStream tok = new LowerCaseFilter(src);
     tok = new StopFilter(tok, stopwords);
+    // 初始化好了TokenStream了对吧。
     return new TokenStreamComponents(r -> {
       src.setMaxTokenLength(StandardAnalyzer.this.maxTokenLength);
       src.setReader(r);

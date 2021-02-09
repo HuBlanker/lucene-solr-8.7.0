@@ -50,7 +50,7 @@ public final class FieldInvertState {
   final String name;
   // 索引类型
   final IndexOptions indexOptions;
-  //
+  // position???
   int position;
   int length;
   int numOverlap;
@@ -65,6 +65,7 @@ public final class FieldInvertState {
   OffsetAttribute offsetAttribute;
   PositionIncrementAttribute posIncrAttribute;
   PayloadAttribute payloadAttribute;
+  // PackedTokenAttributeImpl
   TermToBytesRefAttribute termAttribute;
   TermFrequencyAttribute termFreqAttribute;
 
@@ -105,6 +106,7 @@ public final class FieldInvertState {
   // TODO: better name?
   /**
    * Sets attributeSource to a new instance.
+   * 传入进来的是个TOkenStream. 比如StopFilter.
    */
   void setAttributeSource(AttributeSource attributeSource) {
     if (this.attributeSource != attributeSource) {

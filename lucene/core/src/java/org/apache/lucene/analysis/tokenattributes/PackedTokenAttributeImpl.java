@@ -27,7 +27,12 @@ import org.apache.lucene.util.AttributeReflector;
  * <li>{@link PositionLengthAttribute}
  * <li>{@link OffsetAttribute}
  * <li>{@link TermFrequencyAttribute}
- * </ul>*/
+ * </ul>
+ * <br/>
+ *
+ * lucene 常用的一些公共属性的默认实现都在这里啦
+ *
+ * */
 public class PackedTokenAttributeImpl extends CharTermAttributeImpl 
                    implements TypeAttribute, PositionIncrementAttribute,
                               PositionLengthAttribute, OffsetAttribute,

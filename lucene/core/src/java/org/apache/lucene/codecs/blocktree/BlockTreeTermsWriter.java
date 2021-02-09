@@ -325,7 +325,9 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
   }
 
   /** Throws {@code IllegalArgumentException} if any of these settings
-   *  is invalid. */
+   *  is invalid.
+   *  验证参数
+   *  */
   public static void validateSettings(int minItemsInBlock, int maxItemsInBlock) {
     if (minItemsInBlock <= 1) {
       throw new IllegalArgumentException("minItemsInBlock must be >= 2; got " + minItemsInBlock);

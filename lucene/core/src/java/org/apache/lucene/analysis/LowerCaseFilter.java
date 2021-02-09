@@ -38,6 +38,7 @@ public class LowerCaseFilter extends TokenFilter {
   
   @Override
   public final boolean incrementToken() throws IOException {
+    // 还有下一个，就转小写
     if (input.incrementToken()) {
       CharacterUtils.toLowerCase(termAtt.buffer(), 0, termAtt.length());
       return true;

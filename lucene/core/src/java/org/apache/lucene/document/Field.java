@@ -229,6 +229,9 @@ public class Field implements IndexableField {
    * @throws IllegalArgumentException if either the name, value or type
    *         is null, or if the field's type is neither indexed() nor stored(), 
    *         or if indexed() is false but storeTermVectors() is true.
+   * <br/>
+   *
+   * 这是常用的String类型的一个Field.
    */
   public Field(String name, CharSequence value, IndexableFieldType type) {
     if (name == null) {
@@ -240,6 +243,7 @@ public class Field implements IndexableField {
     if (type == null) {
       throw new IllegalArgumentException("type must not be null");
     }
+    // 不索引不存储，你干啥来了
     if (!type.stored() && type.indexOptions() == IndexOptions.NONE) {
       throw new IllegalArgumentException("it doesn't make sense to have a field that "
         + "is neither indexed nor stored");
@@ -476,6 +480,7 @@ public class Field implements IndexableField {
     return type;
   }
 
+  // 一个Field，内容怎么变成一串token.其实实现在这里
   @Override
   public TokenStream tokenStream(Analyzer analyzer, TokenStream reuse) {
     if (fieldType().indexOptions() == IndexOptions.NONE) {
@@ -483,8 +488,11 @@ public class Field implements IndexableField {
       return null;
     }
 
+    // 不分词的域
     if (!fieldType().tokenized()) {
+      // 值是string
       if (stringValue() != null) {
+        // 确保把reuse改成一个StringTokenStream
         if (!(reuse instanceof StringTokenStream)) {
           // lazy init the TokenStream as it is heavy to instantiate
           // (attributes,...) if not needed
@@ -493,6 +501,7 @@ public class Field implements IndexableField {
         ((StringTokenStream) reuse).setValue(stringValue());
         return reuse;
       } else if (binaryValue() != null) {
+        // 如果是二进制的值，确保是一个二进制的stream
         if (!(reuse instanceof BinaryTokenStream)) {
           // lazy init the TokenStream as it is heavy to instantiate
           // (attributes,...) if not needed
@@ -505,18 +514,25 @@ public class Field implements IndexableField {
       }
     }
 
+    // 因为new这个Field的时候，也没初始化，所以
+    // 又要分词，又没有初始化tokenStream,那么就用你的分词器给咱出一个。
     if (tokenStream != null) {
       return tokenStream;
     } else if (readerValue() != null) {
       return analyzer.tokenStream(name(), readerValue());
     } else if (stringValue() != null) {
+      // 根据分词器的初始化，会花里胡哨生成一个tokenstream. 而且是根据field名字不同，缓存了不同的toeknstream.
+      // 懂了一些，其他太复杂的剩下再看。
+      // 对于string来说，这里会小写化，去掉停用词，然后用StandardAnalyzer来进行标准化的分词，好像就是用空格分词吧，对于中文来说就是一个字一个字的。
       return analyzer.tokenStream(name(), stringValue());
     }
 
     throw new IllegalArgumentException("Field must have either TokenStream, String, Reader or Number value; got " + this);
   }
-  
+
+  // 二进制的token流
   private static final class BinaryTokenStream extends TokenStream {
+    // 他用的的是byte属性
     private final BytesTermAttribute bytesAtt = addAttribute(BytesTermAttribute.class);
     private boolean used = true;
     private BytesRef value;
@@ -538,6 +554,7 @@ public class Field implements IndexableField {
         return false;
       }
       clearAttributes();
+      //
       bytesAtt.setBytesRef(value);
       used = true;
       return true;
@@ -554,8 +571,11 @@ public class Field implements IndexableField {
     }
   }
 
+  // 这里的实现挺帅的
   private static final class StringTokenStream extends TokenStream {
+    // chat属性
     private final CharTermAttribute termAttribute = addAttribute(CharTermAttribute.class);
+    // 偏移属性
     private final OffsetAttribute offsetAttribute = addAttribute(OffsetAttribute.class);
     private boolean used = true;
     private String value = null;
@@ -577,7 +597,9 @@ public class Field implements IndexableField {
       if (used) {
         return false;
       }
+      // 清空上一个token的属性
       clearAttributes();
+      // 把下一个token的原始值，偏移量都放进来
       termAttribute.append(value);
       offsetAttribute.setOffset(0, value.length());
       used = true;
