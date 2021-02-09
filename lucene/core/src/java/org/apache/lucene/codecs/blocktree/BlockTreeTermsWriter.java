@@ -338,6 +338,7 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
     }
   }
 
+  // writer
   @Override
   public void write(Fields fields, NormsProducer norms) throws IOException {
     //if (DEBUG) System.out.println("\nBTTW.write seg=" + segment);
@@ -565,8 +566,11 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
 
   }
 
+  // 实际的写入?
   class TermsWriter {
+    // field信息
     private final FieldInfo fieldInfo;
+    // terms 数量
     private long numTerms;
     final FixedBitSet docsSeen;
     long sumTotalTermFreq;

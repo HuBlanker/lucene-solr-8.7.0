@@ -28,6 +28,8 @@ import org.apache.lucene.search.DocIdSetIterator;
  * long[], accessed with an int index, implementing {@link Bits} and
  * {@link DocIdSet}. If you need to manage more than 2.1B bits, use
  * {@link LongBitSet}.
+ * <be/>
+ * 用long来存储bit.
  * 
  * @lucene.internal
  */
