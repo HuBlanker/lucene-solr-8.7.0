@@ -47,6 +47,25 @@ import org.apache.lucene.store.IndexOutput;
  * 3. related numbers or uptos(position, payload).
  * 4. start offset.
  *
+ *
+ * <br/>
+ *
+ * 写一个多层的跳表, 支持啥啥啥。
+ *
+ * <br/>
+ *
+ * 注意skipWriter 会忽略第一个doc。　因为将它作为一个跳跃点没用。此外，　将不会跳跃到 变长int块，　只记录他的起始位置？
+ *
+ * 对于每一个跳跃点，　将会记录：
+ *
+ * <ul>
+ *   <li> docId</li>
+ *   <li> 关联的文件指针</li>
+ *   <li> 关联的一些数字</li>
+ *   <li> 起始偏移量</li>
+ * </ul>
+ *
+ *
  */
 final class Lucene84SkipWriter extends MultiLevelSkipListWriter {
   private int[] lastSkipDoc;
