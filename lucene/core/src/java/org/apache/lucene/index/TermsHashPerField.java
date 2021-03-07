@@ -168,7 +168,9 @@ abstract class TermsHashPerField implements Comparable<TermsHashPerField> {
 
   /** Called once per inverted token.  This is the primary
    *  entry point (for first TermsHash); postings use this
-   *  API. */
+   *  API.
+   *  每一个倒排token,调用一次这个方法.
+   *  */
   void add(BytesRef termBytes, final int docID) throws IOException {
     assert assertDocId(docID);
     // We are first in the chain so we must "intern" the

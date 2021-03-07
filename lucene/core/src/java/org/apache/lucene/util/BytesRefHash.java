@@ -39,6 +39,17 @@ import static org.apache.lucene.util.ByteBlockPool.BYTE_BLOCK_SIZE;
  * {@link #add(BytesRef)} must not be longer than {@link ByteBlockPool#BYTE_BLOCK_SIZE}-2. 
  * The internal storage is limited to 2GB total byte storage.
  * </p>
+ * <br/>
+ *
+ * 这个类是一个特殊目的的hashMap. 为了bytesRes的实例做了一些优化.
+ *
+ * <br/>
+ *
+ * 这个类维护了字节数组到Ids的映射关系.  在连续的存储截至上高效的存储hash后的bytes.
+ * 到ID的映射封装在BytesRefHash中，并确保为每个添加的BytesRef增加。
+ *
+ * <br/>
+ * 可以通过add添加的最大容量, 不能超过ByteBlockPool.Byte_BLOCK_SIZE-2. 内部存储限制在2GB.
  * 
  * @lucene.internal
  */
@@ -49,6 +60,7 @@ public final class BytesRefHash implements Accountable {
       // size of Counter
       RamUsageEstimator.primitiveSizes.get(long.class);
 
+  // hash表的初始大小
   public static final int DEFAULT_CAPACITY = 16;
 
   // the following fields are needed by comparator,

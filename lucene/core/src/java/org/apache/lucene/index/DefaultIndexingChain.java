@@ -1000,7 +1000,7 @@ final class DefaultIndexingChain extends DocConsumer {
         // 确保inverState 中的是这个stream. 而这个stream刚刚reset过。所以这里是空的,
         // 这里相当与把当前的tokenStream直接引用了一份给到了invertState. 那么当tokenStream进行incr时，　中间状态也就变了，因为他持有的是别人的引用
         invertState.setAttributeSource(stream);
-        // 不知道在走啊
+        //
         termsHashPerField.start(field, first);
 
         // 上面说的for循环，其实就是stream的使用方式而已
@@ -1068,6 +1068,7 @@ final class DefaultIndexingChain extends DocConsumer {
           // 那么这里就是唯一的重点咯，刚才把一部分状态算出来，给到了倒排状态，现在把他写入或者怎么样
           // termsHashPerField = FreqProxTermsWriterPerField
           try {
+            // 给这个docId,添加这堆byte[]作为信息.
             termsHashPerField.add(invertState.termAttribute.getBytesRef(), docID);
           } catch (MaxBytesLengthExceededException e) {
             // 相当于回滚逻辑，不看
