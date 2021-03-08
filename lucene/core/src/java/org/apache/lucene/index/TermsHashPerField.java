@@ -33,6 +33,14 @@ import org.apache.lucene.util.IntBlockPool;
  * this class allocates a linked list of slices that can be read by a {@link ByteSliceReader}
  * for each term. Terms are first deduplicated in a {@link BytesRefHash} once this is done
  * internal data-structures point to the current offset of each stream that can be written to.
+ *
+ * // 这个类存储了每一个term的信息流, 不知道流的大小哦.
+ *
+ * 每一个流通常编码了一层信息, 比如每个文档的词频?? 或者词接近.
+ * 这个类内部申请了一个链表, 分片的链表, 可以被类ByteSliceReader读取.
+ *
+ * terms 第一次重新在btesRedHash里面,数据结构点什么玩意的.
+ *
  */
 abstract class TermsHashPerField implements Comparable<TermsHashPerField> {
   private static final int HASH_INIT_SIZE = 4;

@@ -1000,13 +1000,14 @@ final class DefaultIndexingChain extends DocConsumer {
         // 确保inverState 中的是这个stream. 而这个stream刚刚reset过。所以这里是空的,
         // 这里相当与把当前的tokenStream直接引用了一份给到了invertState. 那么当tokenStream进行incr时，　中间状态也就变了，因为他持有的是别人的引用
         invertState.setAttributeSource(stream);
-        //
+        // FreqProxTermsWriterPerField
         termsHashPerField.start(field, first);
 
         // 上面说的for循环，其实就是stream的使用方式而已
         // 这里的stream是一个装饰器
         // stream = StopFilter -> LowCase -> StandardTokenizer.
         // 就是还有下一个的意思
+        // 判断offset/词频什么的, 就是在这个下一步的操作里.
         while (stream.incrementToken()) {
 
           // If we hit an exception in stream.next below
