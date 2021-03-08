@@ -53,9 +53,14 @@ import org.apache.lucene.util.IOUtils;
  *
  * @see Lucene84SkipWriter for details about skipping setting and postings layout.
  * @lucene.experimental
+ *
+ * 这个类　写入　docId　(可能包含有：词频，位置，偏移量，有效载荷).
+ *
+ * 每个term的倒排表将被分开写入.
  */
 public final class Lucene84PostingsWriter extends PushPostingsWriterBase {
 
+  // 三个输出文件
   IndexOutput docOut;
   IndexOutput posOut;
   IndexOutput payOut;
@@ -64,29 +69,40 @@ public final class Lucene84PostingsWriter extends PushPostingsWriterBase {
   IntBlockTermState lastState;
 
   // Holds starting file pointers for current term:
+  // 当前term开始时，　对应文件的文件指针在哪
   private long docStartFP;
   private long posStartFP;
   private long payStartFP;
 
+  // length = block size. docId增量　缓冲区. 根据增量肯定能复原每一个docId.
   final long[] docDeltaBuffer;
+  // length = block size
   final long[] freqBuffer;
+  // 下标?
   private int docBufferUpto;
 
+  // 应该是一堆平行数组，　长度都是block_size.
+  // 分别存储pos/pay/offset　之类的内容的缓冲区
   final long[] posDeltaBuffer;
   final long[] payloadLengthBuffer;
   final long[] offsetStartDeltaBuffer;
   final long[] offsetLengthBuffer;
+  // 下标
   private int posBufferUpto;
 
+  // payload的ｂｙｔｅｓ
   private byte[] payloadBytes;
+  // 他的下标
   private int payloadByteUpto;
 
+  // 上一个block的最后一个ID吗？？？
   private int lastBlockDocID;
   private long lastBlockPosFP;
   private long lastBlockPayFP;
   private int lastBlockPosBufferUpto;
   private int lastBlockPayloadByteUpto;
 
+  // 上一个docId
   private int lastDocID;
   private int lastPosition;
   private int lastStartOffset;
@@ -217,24 +233,28 @@ public final class Lucene84PostingsWriter extends PushPostingsWriterBase {
     competitiveFreqNormAccumulator.clear();
   }
 
-  // 开始一个Doc的写入过程？
+  // 在这里写入，　是以term为单位. 一个term, 几百个doc有，就会执行一次startTerm, 几百次startDoc.
+  // 词频是: 当前这个term, 在docId中出现的次数
   @Override
   public void startDoc(int docID, int termDocFreq) throws IOException {
     // Have collected a block of docs, and get a new doc. 
     // Should write skip data as well as postings list for
     // current block.
+    // 不是某个term的第一个doc
     if (lastBlockDocID != -1 && docBufferUpto == 0) {
       skipWriter.bufferSkip(lastBlockDocID, competitiveFreqNormAccumulator, docCount,
           lastBlockPosFP, lastBlockPayFP, lastBlockPosBufferUpto, lastBlockPayloadByteUpto);
       competitiveFreqNormAccumulator.clear();
     }
 
+    // 当前的docId　和上一个的差值
     final int docDelta = docID - lastDocID;
 
     if (docID < 0 || (docCount > 0 && docDelta <= 0)) {
       throw new CorruptIndexException("docs out of order (" + docID + " <= " + lastDocID + " )", docOut);
     }
 
+    // 这里用了增量编码，存储了所有的docId.
     docDeltaBuffer[docBufferUpto] = docDelta;
     // 如果索引类型包含词频
     if (writeFreqs) {
@@ -244,9 +264,12 @@ public final class Lucene84PostingsWriter extends PushPostingsWriterBase {
     docBufferUpto++;
     docCount++;
 
+    // buffer满了就写入一下
     if (docBufferUpto == BLOCK_SIZE) {
+      // 一次写入一个block的docId
       forDeltaUtil.encodeDeltas(docDeltaBuffer, docOut);
       if (writeFreqs) {
+        // 这里写了词频, 也是一个block的
         pforUtil.encode(freqBuffer, docOut);
       }
       // NOTE: don't set docBufferUpto back to 0 here;
@@ -262,7 +285,7 @@ public final class Lucene84PostingsWriter extends PushPostingsWriterBase {
     long norm;
     if (fieldHasNorms) {
       boolean found = norms.advanceExact(docID);
-      if (found == false) {
+      if (!found) {
         // This can happen if indexing hits a problem after adding a doc to the
         // postings but before buffering the norm. Such documents are written
         // deleted and will go away on the first merge.
@@ -333,7 +356,10 @@ public final class Lucene84PostingsWriter extends PushPostingsWriterBase {
     // Since we don't know df for current term, we had to buffer
     // those skip data for each block, and when a new doc comes, 
     // write them to skip file.
+    // 如果buffer满了，　就把这些都记下来，　记录想上一个块的最后一个相关信息，等下一个进来的时候，　再写入到文件里面去
+    // 不满不做任何操作
     if (docBufferUpto == BLOCK_SIZE) {
+      // 上一个快的最后一个docId
       lastBlockDocID = lastDocID;
       if (posOut != null) {
         if (payOut != null) {
@@ -359,6 +385,7 @@ public final class Lucene84PostingsWriter extends PushPostingsWriterBase {
     
     // docFreq == 1, don't write the single docid/freq to a separate file along with a pointer to it.
     final int singletonDocID;
+    // 到这边的时候，前面的多个block已经是intpacked. 这里主要是写入Vint, 也就是最后一个不满的block.
     if (state.docFreq == 1) {
       // pulse the singleton docid into the term dictionary, freq is implicitly totalTermFreq
       singletonDocID = (int) docDeltaBuffer[0];
@@ -373,6 +400,7 @@ public final class Lucene84PostingsWriter extends PushPostingsWriterBase {
         } else if (freq == 1) {
           docOut.writeVInt((docDelta<<1)|1);
         } else {
+          // 写两个变长int
           docOut.writeVInt(docDelta<<1);
           docOut.writeVInt(freq);
         }

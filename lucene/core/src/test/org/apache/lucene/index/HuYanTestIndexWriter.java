@@ -34,7 +34,7 @@ public class HuYanTestIndexWriter extends LuceneTestCase {
     // add one document & close writer
 //    for (int i = 0; i < 3000; i++) {
     addDoc(indexWriter, 0);
-    addDoc(indexWriter, 1);
+//    addDoc(indexWriter, 1);
 //
 //    }
     indexWriter.commit();
@@ -44,7 +44,7 @@ public class HuYanTestIndexWriter extends LuceneTestCase {
 
   static void addDoc(IndexWriter writer, int i) throws IOException {
     Document doc = new Document();
-    doc.add(newTextField("content", "test index" + i, Field.Store.YES));
+    doc.add(newTextField("content", "index index", Field.Store.YES));
     writer.addDocument(doc);
   }
 }

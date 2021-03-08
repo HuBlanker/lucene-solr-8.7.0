@@ -25,6 +25,8 @@ import org.apache.lucene.util.packed.PackedInts;
 
 /**
  * Utility class to encode sequences of 128 small positive integers.
+ *
+ * 编码128个小的正整数.
  */
 final class PForUtil {
 
@@ -45,11 +47,15 @@ final class PForUtil {
 
   /**
    * Encode 128 integers from {@code longs} into {@code out}.
+   *
+   * 编码128个int进去，具体咋存，　看了一点，　没看完呢
+   *
    */
   void encode(long[] longs, DataOutput out) throws IOException {
     // At most 3 exceptions
     final long[] top4 = new long[4];
     Arrays.fill(top4, -1L);
+    // longs里面的前4大的
     for (int i = 0; i < ForUtil.BLOCK_SIZE; ++i) {
       if (longs[i] > top4[0]) {
         top4[0] = longs[i];
@@ -57,6 +63,7 @@ final class PForUtil {
       }
     }
 
+    // 用longs里面最大的值，求出maxBitsRequired.
     final int maxBitsRequired = PackedInts.bitsRequired(top4[3]);
     // We store the patch on a byte, so we can't decrease the number of bits required by more than 8
     final int patchedBitsRequired =  Math.max(PackedInts.bitsRequired(top4[0]), maxBitsRequired - 8);
