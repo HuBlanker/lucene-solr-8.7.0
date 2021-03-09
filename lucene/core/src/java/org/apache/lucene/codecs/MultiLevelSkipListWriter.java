@@ -170,6 +170,7 @@ public abstract class MultiLevelSkipListWriter {
     df /= skipInterval;
 
     // determine max level
+    // 最大层数
     while ((df % skipMultiplier) == 0 && numLevels < numberOfSkipLevels) {
       numLevels++;
       df /= skipMultiplier;

@@ -185,6 +185,7 @@ final class Lucene84SkipWriter extends MultiLevelSkipListWriter {
 
   @Override
   protected void writeSkipData(int level, IndexOutput skipBuffer) throws IOException {
+    // docDelta, docPointDelta, posPointDelta, posNum, payloadNum, payloadPointDelta,  normSize,
 
     int delta = curDoc - lastSkipDoc[level];
 

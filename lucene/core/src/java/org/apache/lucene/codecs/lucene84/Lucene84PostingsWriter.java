@@ -401,7 +401,7 @@ public final class Lucene84PostingsWriter extends PushPostingsWriterBase {
           docOut.writeVInt((docDelta<<1)|1);
         } else {
           // 写两个变长int
-          docOut.writeVInt(docDelta<<1);
+          docOut.writeVInt(docDelta<<15);
           docOut.writeVInt(freq);
         }
       }
