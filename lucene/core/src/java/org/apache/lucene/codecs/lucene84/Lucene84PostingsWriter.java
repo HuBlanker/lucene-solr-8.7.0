@@ -145,6 +145,7 @@ public final class Lucene84PostingsWriter extends PushPostingsWriterBase {
         posDeltaBuffer = new long[BLOCK_SIZE];
         String posFileName = IndexFileNames.segmentFileName(state.segmentInfo.name, state.segmentSuffix, Lucene84PostingsFormat.POS_EXTENSION);
         posOut = state.directory.createOutput(posFileName, state.context);
+        // position header
         CodecUtil.writeIndexHeader(posOut, POS_CODEC, VERSION_CURRENT,
                                      state.segmentInfo.getId(), state.segmentSuffix);
 
@@ -167,6 +168,7 @@ public final class Lucene84PostingsWriter extends PushPostingsWriterBase {
         if (state.fieldInfos.hasPayloads() || state.fieldInfos.hasOffsets()) {
           String payFileName = IndexFileNames.segmentFileName(state.segmentInfo.name, state.segmentSuffix, Lucene84PostingsFormat.PAY_EXTENSION);
           payOut = state.directory.createOutput(payFileName, state.context);
+          // pay file header
           CodecUtil.writeIndexHeader(payOut, PAY_CODEC, VERSION_CURRENT,
                                        state.segmentInfo.getId(), state.segmentSuffix);
         }
@@ -338,12 +340,15 @@ public final class Lucene84PostingsWriter extends PushPostingsWriterBase {
       pforUtil.encode(posDeltaBuffer, posOut);
 
       if (writePayloads) {
+        // payload length // payload size // payloadData
         pforUtil.encode(payloadLengthBuffer, payOut);
         payOut.writeVInt(payloadByteUpto);
         payOut.writeBytes(payloadBytes, 0, payloadByteUpto);
         payloadByteUpto = 0;
       }
       if (writeOffsets) {
+        // offsetStartDelta
+        // offsetLength
         pforUtil.encode(offsetStartDeltaBuffer, payOut);
         pforUtil.encode(offsetLengthBuffer, payOut);
       }
@@ -359,7 +364,7 @@ public final class Lucene84PostingsWriter extends PushPostingsWriterBase {
     // 如果buffer满了，　就把这些都记下来，　记录想上一个块的最后一个相关信息，等下一个进来的时候，　再写入到文件里面去
     // 不满不做任何操作
     if (docBufferUpto == BLOCK_SIZE) {
-      // 上一个快的最后一个docId
+      // 上一个块的最后一个docId
       lastBlockDocID = lastDocID;
       if (posOut != null) {
         if (payOut != null) {
@@ -435,17 +440,21 @@ public final class Lucene84PostingsWriter extends PushPostingsWriterBase {
             final int payloadLength = (int) payloadLengthBuffer[i];
             if (payloadLength != lastPayloadLength) {
               lastPayloadLength = payloadLength;
+              // pos delta
               posOut.writeVInt((posDelta<<1)|1);
+              // payload length
               posOut.writeVInt(payloadLength);
             } else {
               posOut.writeVInt(posDelta<<1);
             }
 
             if (payloadLength != 0) {
+              // payload bytes
               posOut.writeBytes(payloadBytes, payloadBytesReadUpto, payloadLength);
               payloadBytesReadUpto += payloadLength;
             }
           } else {
+            // pos delata
             posOut.writeVInt(posDelta);
           }
 
@@ -453,9 +462,12 @@ public final class Lucene84PostingsWriter extends PushPostingsWriterBase {
             int delta = (int) offsetStartDeltaBuffer[i];
             int length = (int) offsetLengthBuffer[i];
             if (length == lastOffsetLength) {
+              // offfset start delta
               posOut.writeVInt(delta << 1);
             } else {
+              // offfset start delta
               posOut.writeVInt(delta << 1 | 1);
+              // offset length
               posOut.writeVInt(length);
               lastOffsetLength = length;
             }

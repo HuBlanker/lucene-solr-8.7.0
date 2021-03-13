@@ -127,7 +127,96 @@ import org.apache.lucene.util.packed.DirectWriter;
  *   <li><tt>.dvd</tt>: DocValues data</li>
  *   <li><tt>.dvm</tt>: DocValues metadata</li>
  * </ol>
- * @lucene.experimental
+ *
+ * <br/>
+ * Lucene8.0的DocValue格式.
+ *
+ * <br/>
+ *  在field中有值的doc被编码为：　始终可以知道具有之的一组文档中当前文档的序数.
+ *
+ *  假设具有该字段的文档集合为{1,5,6,11}. 当遍历到6的时候，我们知道遍历到集合的第三个元素了.
+ *
+ *  这样的话，值可以被密集的存储并且在搜索的时候，　可以根据他们的索引/下标进行访问.
+ *
+ *  如果一个分片中的所有文档都包含有该filed.　索引就和他的docId是一样的，因此这种情况下编码是隐含的，并且在查找的时候非常的快.
+ *
+ *  <br/>
+ *  在另外一种情况下，如果一些文档没有这个字段，有值的文档就会被编码成块. 一个块中的所有docIds将按照下面的策略共享高位的 16bits.
+ *
+ *  <ul>
+ *    <li>
+ *      <b>SPAESE(稀疏的)</b>: 如果一个块含有最多4095个doc,那么将使用这个策略. 低16位将使用shorts存储，高16位由docId给定.
+ *    </li>
+ *    <li>
+ *      <B>DENSE:(密集的)</B> 如果一个块含有4096~65535个docId，那么将使用这个策略.低位的bit将存储在一个bitSet中. 512之前的文档将使用`ntz`
+ *      操作进行优化，　因为索引是根据访问的longs的bitCounts累加计算的？？？
+ *      <p> 大于等于512的文档，通过跳过需要的512个文档子块，迭代到所需的文档快. 子块的索引是跳过ｘｘｘ的查找的.排名表包含有原使用的所有编号。
+ *      使用无符号的short来存储.</p>
+ *    </li>
+ *    <li>
+ *      <b>all: </b> 这个策略在一个块含有准确的65536个文档时使用. 意味着块是满的.
+ *      这种情况下，docIds不需要明确的存储。这个策略通常是比前两个策略快的。因为所有文档都含有某个字段，那么就是连续的docIds.　可以使用`Index sorting`
+ *      。这是更加可取的.
+ *    </li>
+ *  </ul>
+ *  跳过一些块来找到想要的文档也是ＯＫ的. 也可以使用存储在块链末尾的跳转表来进行。
+ *  跳转表保存所有块的偏移量和索引，每个块打包成一个long.
+ *
+ *  使用一下策略对五种每个文档的值类型进行编码.
+ *
+ *  <B> NUMERIC:</B>
+ *
+ *  <ul>
+ *    <li>
+ *      <b>delta-compressed:</b>: 每一个文档的整数,使用增量编码后用bitPacking进行压缩.更多的信息可以看:DirectWriter.我看过了嘻嘻》
+ *      <b>Table-compressed: </b> 如果唯一值的数量很小(<256),　同时在已有的值区间里有一些没有使用的gaps？，写入一个表？？
+ *      每个文档节点用他们的序数表示在这个表中，这些序数也是用bitpacking压缩.
+ *      <b>GCD-compressed:</b> 如果所有的数字都共享一个相同的除数(是指他们有公约数?)., 比如dates，最大公约数算出来，然后把商使用增量编码压缩起来.
+ *      <b>Monotonic-compressed:</b> 如果所有的数字都是单调递增的，那么就能比delta-compressed压缩的更狠一点，详细的可以看：　MonotonicDirectWriter.
+ *      <b> Const-compressed: </b>  只有一个可能的值，不需要每个文档都存一遍了，直接把这个值自己存起来.
+ *    </li>
+ *  </ul>
+ *
+ *  取决于计算收益，数字可能被分割到块里去.( 16384个)
+ *  这种情况下，一个`块的偏移量的跳表` 被添加在所有的blocks后面，为了能在o(1)的时间复杂度内访问想要的块.
+ *
+ * <B> BINARY:</B>
+ * <ul>
+ *   <li>
+ *     <B>　Fixed-width Binary:</B> 一个大的级联的字节数组. 固定长度. 每一个文档的值可以被直接找到，通过 (docId * length)
+ *     <B> Variable-width Binary:</B> 一个大的级联的字节数组，记录了每个文档的结束地址，地址使用单调递增压缩存储.
+ *     <B> Prefix-compressed Binary:</B> 前缀压缩. 所有的值写在16个一块的块里. 块里的第一个值全部写入而后面的值共享前缀.
+ *     chunk的地址使用单调递增压缩存储. 反向查询索引是每个第1024个词的位置写入的.
+ *   </li>
+ * </ul>
+ *
+ * <B> SORTED:</B>
+ *
+ * sorted: 一个普通元素到重复元素的映射，　使用前缀压缩。　每个原始文档使用上面的某一种Numertic策略.
+ *
+ * <B> SORTED SET</B>
+ * <ul>
+ *   <li>
+ *     <B> Single: </B> 如果所有的文档有１个或者０个值，那么数据将使用上面的SORTED存储.
+ *   </li>
+ *   <li>
+ *     <B> SortedSet </B>
+ * 一   个普通元素到重复元素的映射，　使用前缀压缩。　每个原始文档的列表及他的索引使用上面的某一种Numertic策略.
+ *   </li>
+ * </ul>
+ *
+ * <B> Sorted Numeric</B>
+ * <ul>
+ *   <li>
+ *     <B> Single</B>: 如果有文档有1个或者0个值，那么使用numeric存储.
+ *   </li>
+ *   <li>
+ *     <B> SortedNumeric</B>:
+ * 一   个普通元素到重复元素的映射，　使用前缀压缩。　每个原始文档的列表及他的索引使用上面的某一种Numertic策略.
+ *   </li>
+ * </ul>
+
+ *
  */
 public final class Lucene80DocValuesFormat extends DocValuesFormat {
 

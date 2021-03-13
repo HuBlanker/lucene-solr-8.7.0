@@ -73,12 +73,15 @@ final class Lucene80DocValuesConsumer extends DocValuesConsumer implements Close
     boolean success = false;
     try {
       this.state = state;
+      // data header
       String dataName = IndexFileNames.segmentFileName(state.segmentInfo.name, state.segmentSuffix, dataExtension);
       data = state.directory.createOutput(dataName, state.context);
       CodecUtil.writeIndexHeader(data, dataCodec, Lucene80DocValuesFormat.VERSION_CURRENT, state.segmentInfo.getId(), state.segmentSuffix);
+      // meta header
       String metaName = IndexFileNames.segmentFileName(state.segmentInfo.name, state.segmentSuffix, metaExtension);
       meta = state.directory.createOutput(metaName, state.context);
       CodecUtil.writeIndexHeader(meta, metaCodec, Lucene80DocValuesFormat.VERSION_CURRENT, state.segmentInfo.getId(), state.segmentSuffix);
+
       maxDoc = state.segmentInfo.maxDoc();
       success = true;
     } finally {
@@ -123,6 +126,7 @@ final class Lucene80DocValuesConsumer extends DocValuesConsumer implements Close
     });
   }
 
+  // 可以计算一堆数字的最大最小值，以及使用增量编码需要的总bit数量
   private static class MinMaxTracker {
     long min, max, numValues, spaceInBits;
 
