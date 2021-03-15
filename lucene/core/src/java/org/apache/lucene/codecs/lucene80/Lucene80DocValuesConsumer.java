@@ -162,7 +162,9 @@ final class Lucene80DocValuesConsumer extends DocValuesConsumer implements Close
     }
   }
 
+  // 写入值
   private long[] writeValues(FieldInfo field, DocValuesProducer valuesProducer) throws IOException {
+    // 拿到一个field的值
     SortedNumericDocValues values = valuesProducer.getSortedNumeric(field);
     int numDocsWithValue = 0;
     MinMaxTracker minMax = new MinMaxTracker();

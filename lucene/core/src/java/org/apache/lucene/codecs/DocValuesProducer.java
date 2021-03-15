@@ -31,6 +31,8 @@ import org.apache.lucene.util.Accountable;
 /** Abstract API that produces numeric, binary, sorted, sortedset,
  *  and sortednumeric docvalues.
  *
+ *  生产域的各种值的一个抽象API
+ *
  * @lucene.experimental
  */
 public abstract class DocValuesProducer implements Closeable, Accountable {
