@@ -74,6 +74,52 @@ import org.apache.lucene.store.DataOutput;
  *   </ul>
  * </ol>
  * @lucene.experimental
+ *
+ * lucene 8.0　打分标准化格式.
+ *
+ * <br/>
+ *
+ * 编码归一化的数据，使用可以表示范围的最小字节数来编码.
+ *
+ * <br></br>
+ *
+ * 归一化的元数据在 .nvm文件中。
+ *
+ * 对于每一个归一化的field. 这个存储了元数据，比如在nvd文件中的偏移量,
+ *
+ * nvm文件中存储了: header, <entry ^ Numfields, footer.
+ *
+ * <ul>
+ *   <li>
+ *     header:
+ *   </li>
+ *   <li>
+ *     Entry: FieldNumber, DocsWithFieldAddress, DocsWithFieldLength, NumDocsWithField,
+ *     BytesPerNorm, NormsAddrsss.
+ *   </li>
+* 接下来是一堆的长度介绍，　没啥意思.
+ * </ul>
+ *
+ * 当FieldNumber是-1时候表示元数据到结尾了.
+ * <br/>
+ *
+ * NormsAddress是nvd文件中数据起始位置的指针, 或者当BytesPerValue=0时的一个值.
+ *
+ * 如果BytesPerValue不是0,那么在这个偏移位置可以读取到NumDocsWithField.
+ *
+ * <br/>
+ *
+ * docsWithFieldAddress 是nvd文件中具有值的文档集合开始位置的指针，如果没有文档有归一化的值，这个值是-2,如果所有文档都有规范值，这个值为-1.
+ *
+ * DocsWithFieldLength 是有规范值的文档集合，编码后一共使用了多少字节.
+ *
+ * <br>
+ *  nvd文件存储了归一化的值.
+ *
+ *  对于每一个标准化的域，这个文件存储了实际的每个文档的值.
+ *
+ *  格式介绍，　我就不翻译了，直接看人家的写的挺好的.
+ *
  */
 public class Lucene80NormsFormat extends NormsFormat {
 

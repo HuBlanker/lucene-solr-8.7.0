@@ -70,6 +70,8 @@ import org.apache.lucene.util.IOUtils;
  * <p>This is a singleton, you have to use {@link #INSTANCE}.
  *
  * @see LockFactory
+ *
+ * 单例的锁工厂
  */
 
 public final class NativeFSLockFactory extends FSLockFactory {
@@ -83,12 +85,15 @@ public final class NativeFSLockFactory extends FSLockFactory {
 
   private NativeFSLockFactory() {}
 
+  // 获取锁
+  // 基本上可以理解为创建这个文件，然后保持连接，就是拿到锁咯
   @Override
   protected Lock obtainFSLock(FSDirectory dir, String lockName) throws IOException {
     Path lockDir = dir.getDirectory();
     
     // Ensure that lockDir exists and is a directory.
     // note: this will fail if lockDir is a symlink
+    // 创建dir
     Files.createDirectories(lockDir);
     
     Path lockFile = lockDir.resolve(lockName);

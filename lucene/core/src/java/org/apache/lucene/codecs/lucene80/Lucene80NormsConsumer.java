@@ -41,12 +41,16 @@ final class Lucene80NormsConsumer extends NormsConsumer {
   Lucene80NormsConsumer(SegmentWriteState state, String dataCodec, String dataExtension, String metaCodec, String metaExtension) throws IOException {
     boolean success = false;
     try {
+      // data header
       String dataName = IndexFileNames.segmentFileName(state.segmentInfo.name, state.segmentSuffix, dataExtension);
       data = state.directory.createOutput(dataName, state.context);
       CodecUtil.writeIndexHeader(data, dataCodec, VERSION_CURRENT, state.segmentInfo.getId(), state.segmentSuffix);
+
+      // metaHeader
       String metaName = IndexFileNames.segmentFileName(state.segmentInfo.name, state.segmentSuffix, metaExtension);
       meta = state.directory.createOutput(metaName, state.context);
       CodecUtil.writeIndexHeader(meta, metaCodec, VERSION_CURRENT, state.segmentInfo.getId(), state.segmentSuffix);
+      // max Doc
       maxDoc = state.segmentInfo.maxDoc();
       success = true;
     } finally {
@@ -81,6 +85,7 @@ final class Lucene80NormsConsumer extends NormsConsumer {
   @Override
   public void addNormsField(FieldInfo field, NormsProducer normsProducer) throws IOException {
     NumericDocValues values = normsProducer.getNorms(field);
+    // 这个域上有值的doc数量
     int numDocsWithValue = 0;
     long min = Long.MAX_VALUE;
     long max = Long.MIN_VALUE;
@@ -92,37 +97,54 @@ final class Lucene80NormsConsumer extends NormsConsumer {
     }
     assert numDocsWithValue <= maxDoc;
 
+    // field Number
     meta.writeInt(field.number);
 
+    // 如果没有文档在这个域上有norms值
     if (numDocsWithValue == 0) {
+      // -2
       meta.writeLong(-2); // docsWithFieldOffset
+      // 0
       meta.writeLong(0L); // docsWithFieldLength
       meta.writeShort((short) -1); // jumpTableEntryCount
       meta.writeByte((byte) -1); // denseRankPower
     } else if (numDocsWithValue == maxDoc) {
+      // 如果每一个都有值
       meta.writeLong(-1); // docsWithFieldOffset
       meta.writeLong(0L); // docsWithFieldLength
       meta.writeShort((short) -1); // jumpTableEntryCount
       meta.writeByte((byte) -1); // denseRankPower
     } else {
+      // 之外的情况
       long offset = data.getFilePointer();
+      // 在data文件中的偏移位置
       meta.writeLong(offset); // docsWithFieldOffset
       values = normsProducer.getNorms(field);
+      // 写了点data进去
       final short jumpTableEntryCount = IndexedDISI.writeBitSet(values, data, IndexedDISI.DEFAULT_DENSE_RANK_POWER);
+      // 写了多长的数据
       meta.writeLong(data.getFilePointer() - offset); // docsWithFieldLength
+      // jump什么万一
       meta.writeShort(jumpTableEntryCount);
+      // 这是个啥
       meta.writeByte(IndexedDISI.DEFAULT_DENSE_RANK_POWER);
     }
 
+    // 这个域有多少个doc有值
     meta.writeInt(numDocsWithValue);
     int numBytesPerValue = numBytesPerValue(min, max);
 
+    // 每个值占用多少字节
     meta.writeByte((byte) numBytesPerValue);
+    // 全部一样
     if (numBytesPerValue == 0) {
+      // 写个min,
       meta.writeLong(min);
     } else {
+      // 记录下指针
       meta.writeLong(data.getFilePointer()); // normsOffset
       values = normsProducer.getNorms(field);
+      // 给data里面写数据
       writeValues(values, numBytesPerValue, data);
     }
   }

@@ -25,6 +25,13 @@ import java.io.IOException;
  * {@link #NO_MORE_DOCS} is set to {@value #NO_MORE_DOCS} in order to be used as
  * a sentinel object. Implementations of this class are expected to consider
  * {@link Integer#MAX_VALUE} as an invalid value.
+ *
+ * 这个抽象类，　定义了遍历一个(不会变小的docId 集合）的方法.
+ *
+ * 注意这个类假设他遍历的是docId。　因此用2147483647来作为没有更多doc的标识.
+ *
+ * 这个类的实现类被期望使用int的最大值作为非法值.
+ *
  */
 public abstract class DocIdSetIterator {
   
@@ -135,6 +142,7 @@ public abstract class DocIdSetIterator {
   /**
    * When returned by {@link #nextDoc()}, {@link #advance(int)} and
    * {@link #docID()} it means there are no more docs in the iterator.
+   * // 不管被谁返回，　都代表返回完了，没有多的doc了
    */
   public static final int NO_MORE_DOCS = Integer.MAX_VALUE;
 
@@ -147,6 +155,19 @@ public abstract class DocIdSetIterator {
    * <li>Otherwise it should return the doc ID it is currently on.
    * </ul>
    * <p>
+   *
+   * <br/>
+   * <ul>
+   *   <li>
+   *     如果nextDoc/advance没有被调用过，那么是-1.
+   *   </li>
+   *   <li>
+   *     如果没了，　就是最大值
+   *   </li>
+   *   <li>
+   *     其他情况下，返回当前的docId.
+   *   </li>
+   * </ul>
    * 
    * @since 2.9
    */
@@ -161,6 +182,10 @@ public abstract class DocIdSetIterator {
    * method, as it may result in unpredicted behavior.
    * 
    * @since 2.9
+   *
+   * 前进到当前集合的下一个id. 返回当前的哪个doc. 如果没了就返回最大值.
+   *
+   * 注意: 如果没了，不能再调用这个方法，　会有不可预知的错误.
    */
   public abstract int nextDoc() throws IOException;
 
@@ -194,11 +219,25 @@ public abstract class DocIdSetIterator {
    * <p>
    *
    * @since 2.9
+  *
+  * // 前进到大于等于给定id的那个文档. 返回他的文档编号. 如果给定值太大了，就返回没有.
+  *
+  * // 如果给定的目标值小于当前值，或者迭代器没了，　这个方法没有定义怎么做，　可能导致奇怪的问题.
+  *
+  * <br/>
+  * 如果给定的目标值大于当前值，那么要按照下面写的做.
+  *
+  * 就是一直找到目标值然后返回. 很多实现比这个高效很多.
+  *
+  * <br/>
+  * 这个方法可能会被某些打分其用最大值来调用，用以提高效率. 如果你的实现不能搞笑的判断是否遍历完成，　建议你在每次调用这个方法都check一下.
+  *
    */
   public abstract int advance(int target) throws IOException;
 
   /** Slow (linear) implementation of {@link #advance} relying on
    *  {@link #nextDoc()} to advance beyond the target position. */
+  // 一个慢的前进，　线性的实现，依靠与nextDoc来一步一步走到目标值.
   protected final int slowAdvance(int target) throws IOException {
     assert docID() < target;
     int doc;
@@ -214,6 +253,12 @@ public abstract class DocIdSetIterator {
    * This is generally an upper bound of the number of documents this iterator
    * might match, but may be a rough heuristic, hardcoded value, or otherwise
    * completely inaccurate.
+   *
+   * 返回当前迭代器的大概的cost数值
+   * 这通常是这个迭代器可能匹配的文档数量的上线，　但是可能是一个粗略的值，　硬编码的值，　或是完全不准确的一个值.
+   * <br/>
+   *
+   *
    */
   public abstract long cost();
   

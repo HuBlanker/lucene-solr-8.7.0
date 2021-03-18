@@ -88,6 +88,75 @@ import org.apache.lucene.util.RoaringDocIdSet;
  * This ensures locality and keeps logistics simple.
  *
  * @lucene.internal
+ *
+ * // 看起来很是浮夸的一个类.
+ *
+ * <br/>
+ *
+ * DocIdSetIterator的磁盘实现版本，可以返回当前文档的索引.
+ * <br/>
+ * 这个迭代器可以返回文档列表中，当前文档的序数.
+ * <br/>
+ * 在值编码有值的文档时，　对于稀疏的doc值很有用。
+ *
+ * <br/>
+ * 在实现方面，　DocIdSetIterator的灵感来源于`Roaring bitmaps`，　通过三种方式来编码65536个文档，编码的方式取决于范围内的密度.
+ *
+ * <br/>
+ *
+ * <ul>
+ *   <li>
+ *     ALL 如果范围内刚好有65536个文档,也就是说范围内是充满的.
+ *   </li>
+ *   <li>
+ *     DENSE 如果范围内包含4096或者更多的文档，　就使用这种密集的策略。文档使用bitSet来存储。
+ *   </li>
+ *   <li>
+ *     SPARSE 如果范围内的值少于4096，那么docId的低16bits将使用一个short来存储.
+ *   </li>
+ * </ul>
+ *
+ * 范围内至少有一个值的时候，他才会被存储.
+ *
+ * <br/>
+ * 最糟糕的情况下，　每个文档使用了6bytes来存储. 最糟糕的情况就是每个range内都有且只有一个值. 为了避免o(n)的时间复杂度，n是文档的数量，
+ * 使用了两个lookup的表，　一个表存储了block的偏移量和索引，另一个表存储了帮助密集策略下排序的索引.
+ *
+ * <br/>
+ *
+ * lookup表是int-pair的数组，　每个block的偏移量和索引是一个pair.
+ * <br>
+ *
+ *  他支持直接跳跃到目标块，　与普通的迭代，从当前位置向前到下一个位置的方式相反.
+ *
+ *  <br/> 每一个int对，由两个逻辑部分组成: 第一个32bit的int保存了索引(块里位图中为1的bit的数量).可以直接到想要的block。
+ *
+ *  <br/>
+ *
+ *  位图里为１的位数最大就是文档的总数，小于２的３１次方.
+ *  <br/>
+ *  下一个int保存了底层切片的byte的偏移量.因为最多有２的１６次方个块，因此，任何块的最大大小不能超过２的１５次方个字节，以免溢出，如果int为无符号整数，那么最大就是2^16个字节.
+ *
+ *  <br/>
+ *
+ *  当前的情况是，最大的块使用的是密集策略，用了2^13 + 36字节，缓存的开销是 numDocs / 1024 个字节。
+ *
+ *  <br/>
+ *
+ *  注意，　一共有４中类型的块，　前面说的三种策略和不存在的块，即全是０咯.
+ *  对于不存在的块，查找表中的索引等于前一个条目，偏移量等于下一个非空块.
+ *  <br/>
+ *  块查找表存储在整个块结构的末尾。
+ *
+ *  <br/>
+ *  密集块的等级结构是字节对的数组，　在密集快的65536位中，每个子块都有一个条目，默认是512位.
+ *
+ *  每个等级条目都说明该快内的设置位的数目，知道位于子块开始出的位之前的位为止。　
+ *
+ *  <br/>
+ *
+ *  请注意，　第一个子块的等级条目始终是0. 最后一个条目最多是65634.　因此始终适合16为的字节对，
+ *
  */
 final class IndexedDISI extends DocIdSetIterator {
 
@@ -179,6 +248,15 @@ final class IndexedDISI extends DocIdSetIterator {
    * @throws IOException if there was an error writing to out.
    * @return the number of jump-table entries following the blocks, -1 for no entries.
    *         This should be stored in meta and used when creating an instance of IndexedDISI.
+   * // 这个类看起来也太牛逼了吧.
+   * // denseRankPower的解释.
+   * // 对于密集型存储策略而言, 每2^denseRanPower个docId写入一个rank,是所有的排序表那个么？
+   * 这个值为小于7或者大于15,就关闭了密集策略的排序表. 推荐值是8~12. 默认值是9，　也就是说每512个doc写一个排序表, 这将存储在元数据文件中，　并且当创建一个IndexedDISI的时候使用.
+   *
+   * <br/>
+   * 返回值:
+   * jump-table的个数
+   *
    */
   static short writeBitSet(DocIdSetIterator it, IndexOutput out, byte denseRankPower) throws IOException {
     final long origo = out.getFilePointer(); // All jumps are relative to the origo
