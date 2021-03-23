@@ -21,37 +21,48 @@ import org.apache.lucene.util.ArrayUtil;
 
 /**
  * Basic parameters for indexing points on the BKD tree.
+ * bkd树在索引点过程中的一些参数
  */
 public final class BKDConfig {
 
   /** Default maximum number of point in each leaf block */
+  // 每个叶子节点上最多的数字
   public static final int DEFAULT_MAX_POINTS_IN_LEAF_NODE = 512;
 
   /** Maximum number of index dimensions (2 * max index dimensions) */
+  // 索引维度　* 2
   public static final int MAX_DIMS = 16;
 
   /** Maximum number of index dimensions */
+  // 最多的数据维度
   public static final int MAX_INDEX_DIMS = 8;
 
   /** How many dimensions we are storing at the leaf (data) nodes */
+  // 数据维度
   public final int numDims;
 
   /** How many dimensions we are indexing in the internal nodes */
+  // 数据维度
   public final int numIndexDims;
 
   /** How many bytes each value in each dimension takes. */
+  // 每一个维度里的每一个值最多占用的字节数量
   public final int bytesPerDim;
 
   /** max points allowed on a Leaf block */
+  // 实际上配置的叶子节点存储数字数量
   public final int maxPointsInLeafNode;
 
   /** numDataDims * bytesPerDim */
+  // 打包后的字节长度
   public final int packedBytesLength;
 
   /** numIndexDims * bytesPerDim */
+  // 打包后的索引数据的字节长度
   public final int packedIndexBytesLength;
 
   /** packedBytesLength plus docID size */
+  // docId的大小?
   public final int bytesPerDoc;
 
   public BKDConfig(final int numDims, final int numIndexDims, final int bytesPerDim, final int maxPointsInLeafNode) {

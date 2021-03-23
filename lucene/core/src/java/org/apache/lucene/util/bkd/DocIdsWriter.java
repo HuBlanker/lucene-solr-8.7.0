@@ -22,42 +22,58 @@ import org.apache.lucene.index.PointValues.IntersectVisitor;
 import org.apache.lucene.store.DataOutput;
 import org.apache.lucene.store.IndexInput;
 
+// 这竟然是个单独给bkd写的docId写入
 class DocIdsWriter {
 
   private DocIdsWriter() {}
 
+  // 这里对应三种策略啊，什么稀疏的，稠密的，和满的
+  // 把docId写入到out里面
   static void writeDocIds(int[] docIds, int start, int count, DataOutput out) throws IOException {
     // docs can be sorted either when all docs in a block have the same value
     // or when a segment is sorted
     boolean sorted = true;
+    // 检查是否排序
     for (int i = 1; i < count; ++i) {
       if (docIds[start + i - 1] > docIds[start + i]) {
         sorted = false;
         break;
       }
     }
+    // 如果排序了
     if (sorted) {
+      // 写一个0
       out.writeByte((byte) 0);
       int previous = 0;
+      // 增量编码，写入变长的int
       for (int i = 0; i < count; ++i) {
         int doc = docIds[start + i];
         out.writeVInt(doc - previous);
         previous = doc;
       }
     } else {
+      // 没有排序
       long max = 0;
+      // 找到最大值
       for (int i = 0; i < count; ++i) {
         max |= Integer.toUnsignedLong(docIds[start + i]);
       }
+      // 如果小于这个值
       if (max <= 0xffffff) {
+        // 写个标记
         out.writeByte((byte) 24);
         for (int i = 0; i < count; ++i) {
+          // 前8位用short存起来
           out.writeShort((short) (docIds[start + i] >>> 8));
+          // 然后用一个byte存剩下的
           out.writeByte((byte) docIds[start + i]);
         }
       } else {
+        // 写个标记
+
         out.writeByte((byte) 32);
         for (int i = 0; i < count; ++i) {
+          // 直接存储所有的数字,不编码
           out.writeInt(docIds[start + i]);
         }
       }

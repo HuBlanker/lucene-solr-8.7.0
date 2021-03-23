@@ -30,6 +30,7 @@ import org.apache.lucene.util.MathUtil;
 
 /** Handles intersection of an multi-dimensional shape in byte[] space with a block KD-tree previously written with {@link BKDWriter}.
  *
+ * 写入的数据，　靠这个读出来呢
  * @lucene.experimental */
 
 public final class BKDReader extends PointValues {

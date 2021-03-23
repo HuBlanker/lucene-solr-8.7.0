@@ -26,13 +26,16 @@ import org.apache.lucene.util.BytesRef;
 public interface PointValue {
 
   /** Returns the packed values for the dimensions */
+  // 多维数据打包后的字节数组
   BytesRef packedValue();
 
   /** Returns the docID */
+  // 这个点对应的是哪个docId
   int docID();
 
   /** Returns the byte representation of the packed value
    * together with the docID */
+  // docId 和point一起打包的数据
   BytesRef packedValueDocIDBytes();
 
 }

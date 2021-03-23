@@ -29,7 +29,7 @@ import org.apache.lucene.search.DocIdSetIterator;
  * {@link DocIdSet}. If you need to manage more than 2.1B bits, use
  * {@link LongBitSet}.
  * <be/>
- * 用long来存储bit.
+ * 用long来存储bit.而且有大小限制
  * 
  * @lucene.internal
  */
@@ -37,8 +37,11 @@ public final class FixedBitSet extends BitSet implements Bits, Accountable {
 
   private static final long BASE_RAM_BYTES_USED = RamUsageEstimator.shallowSizeOfInstance(FixedBitSet.class);
 
-  private final long[] bits; // Array of longs holding the bits 
+  // 存储了bit的long
+  private final long[] bits; // Array of longs holding the bits
+  // 多少个bits
   private final int numBits; // The number of bits in use
+  // 存储这么多的bits需要多少个long
   private final int numWords; // The exact number of longs needed to hold numBits (<= bits.length)
   
   /**
@@ -49,6 +52,10 @@ public final class FixedBitSet extends BitSet implements Bits, Accountable {
    * <b>NOTE:</b> the returned bitset reuses the underlying {@code long[]} of
    * the given {@code bits} if possible. Also, calling {@link #length()} on the
    * returned bits may return a value greater than {@code numBits}.
+   *
+   * 确认一下容量，不够就扩容呗.
+   *
+   * grow一下就好.
    */
   public static FixedBitSet ensureCapacity(FixedBitSet bits, int numBits) {
     if (numBits < bits.numBits) {
@@ -66,6 +73,7 @@ public final class FixedBitSet extends BitSet implements Bits, Accountable {
   }
 
   /** returns the number of 64 bit words it would take to hold numBits */
+  // bit的数量除以64.
   public static int bits2words(int numBits) {
     return ((numBits - 1) >> 6) + 1; // I.e.: get the word-offset of the last bit and add one (make sure to use >> so 0 returns 0!)
   }
@@ -73,6 +81,7 @@ public final class FixedBitSet extends BitSet implements Bits, Accountable {
   /**
    * Returns the popcount or cardinality of the intersection of the two sets.
    * Neither set is modified.
+   * 交集里面的bit数量
    */
   public static long intersectionCount(FixedBitSet a, FixedBitSet b) {
     // Depends on the ghost bits being clear!
@@ -82,6 +91,7 @@ public final class FixedBitSet extends BitSet implements Bits, Accountable {
   /**
    * Returns the popcount or cardinality of the union of the two sets. Neither
    * set is modified.
+   * // 并集的数量
    */
   public static long unionCount(FixedBitSet a, FixedBitSet b) {
     // Depends on the ghost bits being clear!
@@ -97,6 +107,7 @@ public final class FixedBitSet extends BitSet implements Bits, Accountable {
   /**
    * Returns the popcount or cardinality of "a and not b" or
    * "intersection(a, not(b))". Neither set is modified.
+   * andnot数量
    */
   public static long andNotCount(FixedBitSet a, FixedBitSet b) {
     // Depends on the ghost bits being clear!
@@ -171,6 +182,7 @@ public final class FixedBitSet extends BitSet implements Bits, Accountable {
   /** Returns number of set bits.  NOTE: this visits every
    *  long in the backing bits array, and the result is not
    *  internally cached!
+   *  计数，　多少个.
    */
   @Override
   public int cardinality() {
@@ -178,6 +190,7 @@ public final class FixedBitSet extends BitSet implements Bits, Accountable {
     return (int) BitUtil.pop_array(bits, 0, numWords);
   }
 
+  // get index是1/0
   @Override
   public boolean get(int index) {
     assert index >= 0 && index < numBits: "index=" + index + ", numBits=" + numBits;
