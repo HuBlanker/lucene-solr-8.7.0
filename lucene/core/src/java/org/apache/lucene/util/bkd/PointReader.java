@@ -29,9 +29,11 @@ import java.io.IOException;
 public interface PointReader extends Closeable {
 
   /** Returns false once iteration is done, else true. */
+  // 是否还有下一个值呢???
   boolean next() throws IOException;
 
   /** Sets the packed value in the provided ByteRef */
+  // 把打包好的值，放进到给定的容器里，　反正就是迭代器呗，能知道下一个还有没有，拿到当前的值
   PointValue pointValue();
 
 }

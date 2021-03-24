@@ -21,6 +21,7 @@ import java.util.Arrays;
 /** Radix selector.
  *  <p>This implementation works similarly to a MSB radix sort except that it
  *  only recurses into the sub partition that contains the desired value.
+ *  // 大概类似于一个MSB的基数排序.
  *  @lucene.internal */
 public abstract class RadixSelector extends Selector {
 
@@ -28,10 +29,12 @@ public abstract class RadixSelector extends Selector {
   // this is used as a protection against the fact that radix sort performs
   // worse when there are long common prefixes (probably because of cache
   // locality)
+  // 递归的层数做一个限制，　保护一下计数排序的性能，无线递归太惨了
   private static final int LEVEL_THRESHOLD = 8;
   // size of histograms: 256 + 1 to indicate that the string is finished
   private static final int HISTOGRAM_SIZE = 257;
   // buckets below this size will be sorted with introselect
+  // 如果桶的数量小于100,那么使用introselect进行排序了.
   private static final int LENGTH_THRESHOLD = 100;
 
   // we store one histogram per recursion level
@@ -59,6 +62,8 @@ public abstract class RadixSelector extends Selector {
    *  of all compared strings are equal. This fallback selector is used when
    *  the range becomes narrow or when the maximum level of recursion has
    *  been exceeded. */
+  // 获得一个备用的选择器，　该选择其可以假设所有字符车的前d个字节相等.
+  // 当范围变窄或者超过了最大的递归级别时，　使用这个备用的选择器.
   protected Selector getFallbackSelector(int d) {
     return new IntroSelector() {
       @Override
@@ -112,15 +117,21 @@ public abstract class RadixSelector extends Selector {
   }
 
   @Override
+  // k 是指中间的那个切割的下标
   public void select(int from, int to, int k) {
     checkArgs(from, to, k);
     select(from, to, k, 0, 0);
   }
 
+  // d l 暂时不清楚作用呢
+   // * @param d the character number to compare
+   // * @param l the level of recursion
   private void select(int from, int to, int k, int d, int l) {
+    // 如果数据很少了，或者已经递归的太多了，是不是就换个策略，不要再递归了呢
     if (to - from <= LENGTH_THRESHOLD || d >= LEVEL_THRESHOLD) {
       getFallbackSelector(d).select(from, to, k);
     } else {
+      // 继续递归
       radixSelect(from, to, k, d, l);
     }
   }

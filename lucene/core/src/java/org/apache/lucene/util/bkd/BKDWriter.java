@@ -143,7 +143,7 @@ public class BKDWriter implements Closeable {
 
   // 临时的输出？
   private IndexOutput tempInput;
-  // 最多存储多少个数字
+  // 最多有多少个point在堆上进行排序
   private final int maxPointsSortInHeap;
 
   /**
@@ -420,8 +420,13 @@ public class BKDWriter implements Closeable {
    * points is faster than regular writes with {@link BKDWriter#add} since
    * there is opportunity for reordering points before writing them to
    * disk. This method does not use transient disk in order to reorder points.
+   *
+   * // 使用MutablePointValue来写入一个域，比使用BKDWriter.add更加快. 因为这样可以在写入磁盘之前，对数据点进行重排序.
+   *
+   * // 这个方法不使用短暂的磁盘去排序？？
    */
   public Runnable writeField(IndexOutput metaOut, IndexOutput indexOut, IndexOutput dataOut, String fieldName, MutablePointValues reader) throws IOException {
+    // 如果这个树，　是一维的，那就调用一维，否则就走多维.
     if (config.numDims == 1) {
       return writeField1Dim(metaOut, indexOut, dataOut, fieldName, reader);
     } else {
@@ -454,6 +459,7 @@ public class BKDWriter implements Closeable {
    * median value and partition other values around it. */
   // 在2维及以上，我们递归的选择切割维度，计算中位数然后用中位数来分割值.
   private Runnable writeFieldNDims(IndexOutput metaOut, IndexOutput indexOut, IndexOutput dataOut, String fieldName, MutablePointValues values) throws IOException {
+    // 必须是空的，开整
     if (pointCount != 0) {
       throw new IllegalStateException("cannot mix add and writeField");
     }
@@ -466,6 +472,7 @@ public class BKDWriter implements Closeable {
     // Mark that we already finished:
     finished = true;
 
+    // 点的总数
     pointCount = values.size();
 
     // 多少个叶子节点
@@ -473,24 +480,34 @@ public class BKDWriter implements Closeable {
     // 那么就需要n-1次切割
     final int numSplits = numLeaves - 1;
 
+    // some check
     checkMaxLeafNodeCount(numLeaves);
 
+    // 切割点的值
     final byte[] splitPackedValues = new byte[numSplits * config.bytesPerDim];
+    // 切割维度的值,记录下每一次切割使用的维度
     final byte[] splitDimensionValues = new byte[numSplits];
+    // 每个叶子的文件指针
     final long[] leafBlockFPs = new long[numLeaves];
 
     // compute the min/max for this slice
+    // 最小最大值
     computePackedValueBounds(values, 0, Math.toIntExact(pointCount), minPackedValue, maxPackedValue, scratchBytesRef1);
+    // 拿到所有的docId
     for (int i = 0; i < Math.toIntExact(pointCount); ++i) {
       docsSeen.set(values.getDocID(i));
     }
 
+    // 这开始的data文件指针
     final long dataStartFP = dataOut.getFilePointer();
+    // 父节点使用各个维度进行切割的次数.所以长度是维度. 比如１维3次. 2维８次.
     final int[] parentSplits = new int[config.numIndexDims];
+    // 构建整个树
     build(0, numLeaves, values, 0, Math.toIntExact(pointCount), dataOut,
         minPackedValue.clone(), maxPackedValue.clone(), parentSplits,
         splitPackedValues, splitDimensionValues, leafBlockFPs,
         new int[config.maxPointsInLeafNode]);
+
     assert Arrays.equals(parentSplits, new int[config.numIndexDims]);
 
     scratchBytesRef1.length = config.bytesPerDim;
@@ -521,6 +538,7 @@ public class BKDWriter implements Closeable {
 
     return () -> {
       try {
+        // 把整棵树的索引，写到元数据文件和索引文件中去
         writeIndex(metaOut, indexOut, config.maxPointsInLeafNode, leafNodes, dataStartFP);
       } catch (IOException e) {
         throw new UncheckedIOException(e);
@@ -531,8 +549,10 @@ public class BKDWriter implements Closeable {
   /* In the 1D case, we can simply sort points in ascending order and use the
    * same writing logic as we use at merge time. */
   private Runnable writeField1Dim(IndexOutput metaOut, IndexOutput indexOut, IndexOutput dataOut, String fieldName, MutablePointValues reader) throws IOException {
+    // 对点进行了重排序
     MutablePointsReaderUtils.sort(config, maxDoc, reader, 0, Math.toIntExact(reader.size()));
 
+    // 一个单个维度的bkdwriter
     final OneDimensionBKDWriter oneDimWriter = new OneDimensionBKDWriter(metaOut, indexOut, dataOut);
 
     reader.intersect(new IntersectVisitor() {
@@ -553,6 +573,7 @@ public class BKDWriter implements Closeable {
       }
     });
 
+    // 开始的时候一个个加，最后finish是一个任务，我们拿到了可以等他完事，就相当于树搞好了.
     return oneDimWriter.finish();
   }
 
@@ -1571,6 +1592,8 @@ public class BKDWriter implements Closeable {
 
   /* Recursively reorders the provided reader and writes the bkd-tree on the fly; this method is used
    * when we are writing a new segment directly from IndexWriter's indexing buffer (MutablePointsReader). */
+  // 递归的排序，写入bkd树.
+  // 这个方法用来直接写入一个新的segment
   private void build(int leavesOffset, int numLeaves,
                      MutablePointValues reader, int from, int to,
                      IndexOutput out,
@@ -1582,6 +1605,7 @@ public class BKDWriter implements Closeable {
                      int[] spareDocIds) throws IOException {
 
     if (numLeaves == 1) {
+      // 只有一个叶子，要结束了
       // leaf node
       final int count = to - from;
       assert count <= config.maxPointsInLeafNode;
@@ -1619,6 +1643,7 @@ public class BKDWriter implements Closeable {
           }
         }
       }
+      // 挑选本次的排序维度
       int sortedDim = 0;
       int sortedDimCardinality = Integer.MAX_VALUE;
       for (int dim = 0; dim < config.numDims; ++dim) {
@@ -1632,6 +1657,7 @@ public class BKDWriter implements Closeable {
       }
 
       // sort by sortedDim
+      // 根据维度进行排序
       MutablePointsReaderUtils.sortByDim(config, sortedDim, commonPrefixLengths,
           reader, from, to, scratchBytesRef1, scratchBytesRef2);
 
@@ -1655,6 +1681,7 @@ public class BKDWriter implements Closeable {
         }
       }
       // Save the block file pointer:
+      // 记录下当前叶子节点，在data文件中的指针
       leafBlockFPs[leavesOffset] = out.getFilePointer();
 
       assert scratchOut.size() == 0;
@@ -1665,9 +1692,11 @@ public class BKDWriter implements Closeable {
         docIDs[i - from] = reader.getDocID(i);
       }
       //System.out.println("writeLeafBlock pos=" + out.getFilePointer());
+      // 把docId全部写入到草稿里，写入的方式还挺花里胡哨，我看了一些
       writeLeafBlockDocs(scratchOut, docIDs, 0, count);
 
       // Write the common prefixes:
+      // 公共前缀写入
       reader.getValue(from, scratchBytesRef1);
       System.arraycopy(scratchBytesRef1.bytes, scratchBytesRef1.offset, scratch1, 0, config.packedBytesLength);
       writeCommonPrefixes(scratchOut, commonPrefixLengths, scratch1);
@@ -1682,12 +1711,15 @@ public class BKDWriter implements Closeable {
       };
       assert valuesInOrderAndBounds(config, count, sortedDim, minPackedValue, maxPackedValue, packedValues,
           docIDs, 0);
+      // 写入叶子节点上的所有数据点的实际的值
       writeLeafBlockPackedValues(scratchOut, commonPrefixLengths, count, sortedDim, packedValues, leafCardinality);
+      // 从草稿写入到真实的data文件，然后清空草稿
       scratchOut.copyTo(out);
       scratchOut.reset();
     } else {
       // inner node
 
+      // 切割维度
       final int splitDim;
       // compute the split dimension and partition around it
       if (config.numIndexDims == 1) {

@@ -18,6 +18,7 @@ package org.apache.lucene.util;
 
 /** An implementation of a selection algorithm, ie. computing the k-th greatest
  *  value from a collection. */
+// 选择算法，topK问题
 public abstract class Selector {
 
   /** Reorder elements so that the element at position {@code k} is the same
@@ -25,6 +26,7 @@ public abstract class Selector {
    *  around it: {@code [from, k)} only contains elements that are less than
    *  or equal to {@code k} and {@code (k, to)} only contains elements that
    *  are greater than or equal to {@code k}. */
+  // 重排序元素，以使k位置的元素作为分割点. from->k 的都是小于等于k的. k -> to 的都是大于k的
   public abstract void select(int from, int to, int k);
 
   void checkArgs(int from, int to, int k) {
@@ -37,5 +39,6 @@ public abstract class Selector {
   }
 
   /** Swap values at slots <code>i</code> and <code>j</code>. */
+  // 交换两个槽的内容
   protected abstract void swap(int i, int j);
 }

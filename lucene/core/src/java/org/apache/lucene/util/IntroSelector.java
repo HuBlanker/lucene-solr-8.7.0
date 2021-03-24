@@ -23,27 +23,37 @@ import java.util.Comparator;
  *  falls back to a median of medians when the number of recursion levels exceeds
  *  {@code 2 lg(n)}, as a consequence it runs in linear time on average.</p>
  *  @lucene.internal */
+// 快速选择算法的实现
+// 他使用第一个，中间，最后一个值的中位数作为分割点，　
+// 当递归的数量超过2log(n)的时候，会退回到中位数的中位数 !!!!! 这是一种保底的策略，防止找分割点耽误太久
+  // 因此，　这个算法平均在线性时间内运行.
+  // pivot 这个词语，一般是快速排序的那个分割点的名字，所以其实也是选择分割点咯
 public abstract class IntroSelector extends Selector {
 
   @Override
   public final void select(int from, int to, int k) {
     checkArgs(from, to, k);
+    // 递归的最大深度
     final int maxDepth = 2 * MathUtil.log(to - from, 2);
     quickSelect(from, to, k, maxDepth);
   }
 
+  // 慢的方法，也是保底方法，如果别的方法递归太久了，就终止掉，走这个.
   int slowSelect(int from, int to, int k) {
     return medianOfMediansSelect(from, to-1, k);
   }
 
+  // 这玩意又是一个递归的方法
   int medianOfMediansSelect(int left, int right, int k) {
     do {
       // Defensive check, this is also checked in the calling
       // method. Including here so this method can be used
       // as a self contained quickSelect implementation.
+      // 保守点check一下
       if (left == right) {
         return left;
       }
+
       int pivotIndex = pivot(left, right);
       pivotIndex = partition(left, right, k, pivotIndex);
       if (k == pivotIndex) {
@@ -83,7 +93,9 @@ public abstract class IntroSelector extends Selector {
     return storeIndexEq;
   }
 
+  // 求分割点
   private int pivot(int left, int right) {
+    // 左右范围在5以内的话, 插入排序搞一下，就找到中间点了
     if (right - left < 5) {
       int pivotIndex = partition5(left, right);
       return pivotIndex;
@@ -94,7 +106,9 @@ public abstract class IntroSelector extends Selector {
       if (subRight > right) {
         subRight = right;
       }
+      // 这是左边的值和每5个的中位数
       int median5 = partition5(i, subRight);
+      // 把这次的中位数和xx交换一下
       swap(median5, left + ((i-left)/5));
     }
     int mid = ((right - left) / 10) + left + 1;
@@ -105,6 +119,7 @@ public abstract class IntroSelector extends Selector {
   // selects the median of a group of at most five elements,
   // implemented using insertion sort. Efficient due to
   // bounded nature of data set.
+  // 在最多５个值里面求中位数，使用了插入排序法。由于数据集的自然边界，所以这个算法还是很高效的呢
   private int partition5(int left, int right) {
     int i = left + 1;
     while( i <= right) {
@@ -119,16 +134,21 @@ public abstract class IntroSelector extends Selector {
   }
 
   private void quickSelect(int from, int to, int k, int maxDepth) {
+    // check
     assert from <= k;
     assert k < to;
+    // 一个节点，肯定满足的呢
     if (to - from == 1) {
       return;
     }
+
+    // 最大深度为0,也就是不让我进行递归，直接走笨方法
     if (--maxDepth < 0) {
       slowSelect(from, to, k);
       return;
     }
 
+    // 中间的哪个
     final int mid = (from + to) >>> 1;
     // heuristic: we use the median of the values at from, to-1 and mid as a pivot
     if (compare(from, to - 1) > 0) {
@@ -176,6 +196,7 @@ public abstract class IntroSelector extends Selector {
   /** Compare entries found in slots <code>i</code> and <code>j</code>.
    *  The contract for the returned value is the same as
    *  {@link Comparator#compare(Object, Object)}. */
+  // 比较一下两个槽的数据的大小
   protected int compare(int i, int j) {
     setPivot(i);
     return comparePivot(j);
@@ -183,9 +204,12 @@ public abstract class IntroSelector extends Selector {
 
   /** Save the value at slot <code>i</code> so that it can later be used as a
    * pivot, see {@link #comparePivot(int)}. */
+  // 把i当做中间点,就可以和j比较了
   protected abstract void setPivot(int i);
 
   /** Compare the pivot with the slot at <code>j</code>, similarly to
    *  {@link #compare(int, int) compare(i, j)}. */
+  // 可以和i比较
+  // 其实这两个方法配合起来compare(int,int), so boring
   protected abstract int comparePivot(int j);
 }

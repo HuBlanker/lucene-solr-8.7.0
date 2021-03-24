@@ -26,17 +26,25 @@ import org.apache.lucene.util.BytesRef;
 
 /**
  * Writes points to disk in a fixed-with format.
+ * // 用定长的格式把点写到磁盘上
  *
  * @lucene.internal
  * */
 public final class OfflinePointWriter implements PointWriter {
 
+  // 临时目录，其实都是一个目录
   final Directory tempDir;
+  // 输出文件
   public final IndexOutput out;
+  // 文件名
   public final String name;
+  // 配置
   final BKDConfig config;
+  // 数量
   long count;
+  // done
   private boolean closed;
+  // 期望的数量
   final long expectedCount;
 
   /** Create a new writer with an unknown number of incoming points */
@@ -53,6 +61,7 @@ public final class OfflinePointWriter implements PointWriter {
   public void append(byte[] packedValue, int docID) throws IOException {
     assert closed == false : "Point writer is already closed";
     assert packedValue.length == config.packedBytesLength : "[packedValue] must have length [" + config.packedBytesLength + "] but was [" + packedValue.length + "]";
+    // 直接写入打包好的数据点，之后写入一个docId
     out.writeBytes(packedValue, 0, packedValue.length);
     out.writeInt(docID);
     count++;
@@ -62,8 +71,10 @@ public final class OfflinePointWriter implements PointWriter {
   @Override
   public void append(PointValue pointValue) throws IOException {
     assert closed == false : "Point writer is already closed";
+    // 数据和docId都打包好了
     BytesRef packedValueDocID = pointValue.packedValueDocIDBytes();
     assert packedValueDocID.length == config.bytesPerDoc : "[packedValue and docID] must have length [" + (config.bytesPerDoc) + "] but was [" + packedValueDocID.length + "]";
+    // 直接写入
     out.writeBytes(packedValueDocID.bytes, packedValueDocID.offset, packedValueDocID.length);
     count++;
     assert expectedCount == 0 || count <= expectedCount : "expectedCount=" + expectedCount + " vs count=" + count;
@@ -75,6 +86,7 @@ public final class OfflinePointWriter implements PointWriter {
     return getReader(start, length,  buffer);
   }
 
+  // 一个读取器
   protected OfflinePointReader getReader(long start, long length, byte[] reusableBuffer) throws IOException {
     assert closed: "point writer is still open and trying to get a reader";
     assert start + length <= count: "start=" + start + " length=" + length + " count=" + count;
@@ -99,6 +111,7 @@ public final class OfflinePointWriter implements PointWriter {
     }
   }
 
+  // 删掉临时文件
   @Override
   public void destroy() throws IOException {
     tempDir.deleteFile(name);

@@ -33,28 +33,41 @@ import org.apache.lucene.util.Sorter;
  *
  * Offline Radix selector for BKD tree.
  *
+ * 离线的基数选择???
+ *
  *  @lucene.internal
  * */
 public final class BKDRadixSelector {
   // size of the histogram
+  // 直方图是特么的什么意思啊
   private static final int HISTOGRAM_SIZE = 256;
   // size of the online buffer: 8 KB
+  // 8kb的缓冲区
   private static final int MAX_SIZE_OFFLINE_BUFFER = 1024 * 8;
   // histogram array
+  // 直方图的array
   private final long[] histogram;
   // number of bytes to be sorted: config.bytesPerDim + Integer.BYTES
+  // 要排序的是多少个字节，一般是每个维度的数字的大小+int
   private final int bytesSorted;
   // flag to when we are moving to sort on heap
+  // 最大有多少个point在堆上进行排序
+  // 最多是16M的内存，除以每个point的大小，就能拿到具体的数字了
   private final int maxPointsSortInHeap;
   // reusable buffer
+  // 离线的缓冲区
   private final byte[] offlineBuffer;
   // holder for partition points
+  // 分区
   private final int[] partitionBucket;
   // scratch array to hold temporary data
+  // 临时变量的草稿本
   private final byte[] scratch;
   // Directory to create new Offline writer
+  // 临时目录
   private final Directory tempDir;
   // prefix for temp files
+  // 临时文件的前缀
   private final String tempFileNamePrefix;
   // BKD tree configuration
   private final BKDConfig config;
@@ -70,11 +83,17 @@ public final class BKDRadixSelector {
     // Selection and sorting is done in a given dimension. In case the value of the dimension are equal
     // between two points we tie break first using the data-only dimensions and if those are still equal
     // we tie-break on the docID. Here we account for all bytes used in the process.
+    // 比的最大的多少字节，　具体也不懂
     this.bytesSorted = config.bytesPerDim + (config.numDims - config.numIndexDims) * config.bytesPerDim + Integer.BYTES;
+    // 缓冲区的大小制定了，除以每个值的大小，就是缓冲区的字节长度
     final int numberOfPointsOffline = MAX_SIZE_OFFLINE_BUFFER / config.bytesPerDoc;
+    // 缓冲区初始化
     this.offlineBuffer = new byte[numberOfPointsOffline * config.bytesPerDoc];
+    // 排序的多少byte,这里有多少个分区桶???
     this.partitionBucket = new int[bytesSorted];
+    // 直方图, 直接就是指定的,256个long
     this.histogram = new long[HISTOGRAM_SIZE];
+    // 草稿
     this.scratch = new byte[bytesSorted];
   }
 
@@ -92,20 +111,30 @@ public final class BKDRadixSelector {
    *
    *  If the provided {@code points} is wrapping an {@link OfflinePointWriter}, the
    *  writer is destroyed in the process to save disk space.
+   *
+   *  // 它使用从给定的给定点到给定的点，用两个路径切片填充partitionSlices数组持有人（长度> 1），因此位置0处的路径切片包含分区-从dim值小于或等于的点开始到位置1上切片的to-from点。dimCommonPrefix提供了一个提示，用于在分区点的dim的公共前缀长度的长度。它返回分区点处的暗淡值。如果提供的点包装了OfflinePointWriter，则写入器在进程中被销毁以节省磁盘空间。
+   *
+   *  // 感觉就是给定的挑选一个分割点
+   * @param partitionSlices 这个参数是个空的，长度为２的数组，就是为了放左右的值而已
+   * @param partitionPoint 算出来的切割点，十个类似与index的东西
    */
   public byte[] select(PathSlice points, PathSlice[] partitionSlices, long from, long to, long partitionPoint, int dim, int dimCommonPrefix) throws IOException {
+    // some check
     checkArgs(from, to, partitionPoint);
 
     assert partitionSlices.length > 1 : "[partition alices] must be > 1, got " + partitionSlices.length;
 
     // If we are on heap then we just select on heap
+    // 如果是内存里面玩
     if (points.writer instanceof HeapPointWriter) {
+      // 把给定的这个writer，切成两半呗
       byte[] partition = heapRadixSelect((HeapPointWriter) points.writer, dim, Math.toIntExact(from), Math.toIntExact(to),  Math.toIntExact(partitionPoint), dimCommonPrefix);
       partitionSlices[0] = new PathSlice(points.writer, from, partitionPoint - from);
       partitionSlices[1] = new PathSlice(points.writer, partitionPoint, to - partitionPoint);
       return partition;
     }
 
+    // 如果是磁盘的话
     OfflinePointWriter offlinePointWriter = (OfflinePointWriter) points.writer;
 
     try (PointWriter left = getPointWriter(partitionPoint - from, "left" + dim);
@@ -311,13 +340,19 @@ public final class BKDRadixSelector {
     return partition;
   }
 
+  // 内存里的基数选择, 拿到的是切割点的值
   private byte[] heapRadixSelect(HeapPointWriter points, int dim, int from, int to, int partitionPoint, int commonPrefixLength) {
+    // 当前维度的偏移量
     final int dimOffset = dim * config.bytesPerDim + commonPrefixLength;
+    // 这个维度，除了公共前缀，还要比较几个字节呢
     final int dimCmpBytes = config.bytesPerDim - commonPrefixLength;
+    // 比较的这些字节的位置
     final int dataOffset = config.packedIndexBytesLength - dimCmpBytes;
+    // maxLength: 要排序的最大的字节长度
     new RadixSelector(bytesSorted - commonPrefixLength) {
 
       @Override
+      // 交换
       protected void swap(int i, int j) {
         points.swap(i, j);
       }
@@ -395,6 +430,7 @@ public final class BKDRadixSelector {
   }
 
   /** Sort the heap writer by the specified dim. It is used to sort the leaves of the tree */
+  // points进行排序
   public void heapRadixSort(final HeapPointWriter points, int from, int to, int dim, int commonPrefixLength) {
     final int dimOffset = dim * config.bytesPerDim + commonPrefixLength;
     final int dimCmpBytes = config.bytesPerDim - commonPrefixLength;
@@ -495,6 +531,7 @@ public final class BKDRadixSelector {
   PointWriter getPointWriter(long count, String desc) throws IOException {
     // As we recurse, we hold two on-heap point writers at any point. Therefore the
     // max size for these objects is half of the total points we can have on-heap.
+    // 小的话就返回一个堆上的，　大了的话就是磁盘的.
     if (count <= maxPointsSortInHeap / 2) {
       int size = Math.toIntExact(count);
       return new HeapPointWriter(config, size);
@@ -504,7 +541,9 @@ public final class BKDRadixSelector {
   }
 
   /** Sliced reference to points in an PointWriter. */
+  // 数据点的写入者的切片，　从start切count个
   public static final class PathSlice {
+    // 一个数据点的写入者
     public final PointWriter writer;
     public final long start;
     public final long count;

@@ -28,6 +28,7 @@ import org.apache.lucene.util.BytesRef;
 
 /**
  * Reads points from disk in a fixed-with format, previously written with {@link OfflinePointWriter}.
+ * // 从磁盘上读取写好的点的数据
  *
  * @lucene.internal
  * */
@@ -35,11 +36,16 @@ public final class OfflinePointReader implements PointReader {
 
   long countLeft;
   final IndexInput in;
+  // 内存中的缓冲区
   byte[] onHeapBuffer;
+  // 当前缓冲区的偏移量
   int offset;
   private boolean checked;
+  // 配置
   private final BKDConfig config;
+  // 内存中的数量么
   private int pointsInBuffer;
+  // 最大数量
   private final int maxPointOnHeap;
   // File name we are reading
   final String name;
@@ -58,8 +64,10 @@ public final class OfflinePointReader implements PointReader {
       throw new IllegalArgumentException("Length of [reusableBuffer] must be bigger than " + config.bytesPerDoc);
     }
 
+    // 内存中最多搞多少个点
     this.maxPointOnHeap =  reusableBuffer.length / config.bytesPerDoc;
     // Best-effort checksumming:
+    // 读取一个中间文件
     if (start == 0 && length*config.bytesPerDoc == tempDir.fileLength(tempFileName) - CodecUtil.footerLength()) {
       // If we are going to read the entire file, e.g. because BKDWriter is now
       // partitioning it, we open with checksums:
@@ -74,15 +82,21 @@ public final class OfflinePointReader implements PointReader {
 
     name = tempFileName;
 
+    // 其实位置的seek
     long seekFP = start * config.bytesPerDoc;
+    // 文件也要跳着度过去呢
     in.seek(seekFP);
+    // 左边的个数
     countLeft = length;
+    // 一个buffer
     this.onHeapBuffer = reusableBuffer;
+    // 第一个点
     this.pointValue = new OfflinePointValue(config, onHeapBuffer);
   }
 
   @Override
   public boolean next() throws IOException {
+    // 如果内存里，没有点
     if (this.pointsInBuffer == 0) {
       if (countLeft >= 0) {
         if (countLeft == 0) {
@@ -105,18 +119,21 @@ public final class OfflinePointReader implements PointReader {
         return false;
       }
     } else {
+      // 如果内存里面有，我直接减去一个１，然后offset偏移一下就好了
       this.pointsInBuffer--;
       this.offset += config.bytesPerDoc;
     }
     return true;
   }
 
+  // 直接拿值
   @Override
   public PointValue pointValue() {
     pointValue.setOffset(offset);
    return pointValue;
   }
 
+  // 关闭文件
   @Override
   public void close() throws IOException {
     try {
@@ -132,6 +149,7 @@ public final class OfflinePointReader implements PointReader {
 
   /**
    * Reusable implementation for a point value offline
+   * // 和内存中的实现一毛一样的哇???
    */
   static class OfflinePointValue implements PointValue {
 

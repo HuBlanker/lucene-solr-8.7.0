@@ -28,11 +28,14 @@ import org.apache.lucene.util.packed.PackedInts;
 
 /** Utility APIs for sorting and partitioning buffered points.
  *
+ * 排序和分割缓冲的数据点
+ *
  * @lucene.internal */
 public final class MutablePointsReaderUtils {
 
   MutablePointsReaderUtils() {}
 
+  // 排序咯，根据的是字节数组的排序
   /** Sort the given {@link MutablePointValues} based on its packed value then doc ID. */
   public static void sort(BKDConfig config, int maxDoc,
                           MutablePointValues reader, int from, int to) {
@@ -91,6 +94,7 @@ public final class MutablePointsReaderUtils {
     }.sort(from, to);
   }
 
+  // 按照某个维度进行的排序
   /** Sort points on the given dimension. */
   public static void sortByDim(BKDConfig config, int sortedDim, int[] commonPrefixLengths,
                                MutablePointValues reader, int from, int to,
@@ -136,6 +140,7 @@ public final class MutablePointsReaderUtils {
   /** Partition points around {@code mid}. All values on the left must be less
    *  than or equal to it and all values on the right must be greater than or
    *  equal to it. */
+  // 把所有的点分割，　左边小于，右边大于，相当于树的分割点
   public static void partition(BKDConfig config, int maxDoc, int splitDim, int commonPrefixLen,
                                MutablePointValues reader, int from, int to, int mid,
                                BytesRef scratch1, BytesRef scratch2) {

@@ -22,6 +22,8 @@ import org.apache.lucene.util.BytesRef;
 /** {@link PointValues} whose order of points can be changed.
  *  This class is useful for codecs to optimize flush.
  *  @lucene.internal */
+// PointValues, 是一堆点的集合.
+// 这个类是可以改变排序的一堆点的集合.
 public abstract class MutablePointValues extends PointValues {
 
   /** Sole constructor. */

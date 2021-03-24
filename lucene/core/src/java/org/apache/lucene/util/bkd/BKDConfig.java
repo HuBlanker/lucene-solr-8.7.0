@@ -62,7 +62,7 @@ public final class BKDConfig {
   public final int packedIndexBytesLength;
 
   /** packedBytesLength plus docID size */
-  // docId的大小?
+  // 点的值+docId的总长度。所以一般来说，这个值＝packedBytesLength+4个字节
   public final int bytesPerDoc;
 
   public BKDConfig(final int numDims, final int numIndexDims, final int bytesPerDim, final int maxPointsInLeafNode) {
