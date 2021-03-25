@@ -17,7 +17,9 @@
 package org.apache.lucene.util;
 
 import java.util.Arrays;
+import java.util.Random;
 
+// 快速选择 算法的测试类
 public class TestIntroSelector extends LuceneTestCase {
 
   public void testSelect() {
@@ -73,6 +75,7 @@ public class TestIntroSelector extends LuceneTestCase {
 
     assertEquals(expected[k], actual[k]);
     for (int i = 0; i < actual.length; ++i) {
+      // 范围外的不准变
       if (i < from || i >= to) {
         assertSame(arr[i], actual[i]);
       } else if (i <= k) {
@@ -83,4 +86,43 @@ public class TestIntroSelector extends LuceneTestCase {
     }
   }
 
+  public void testHuyanSelect() {
+    Random r = new Random();
+    Integer[] arr = new Integer[100];
+    for (int iter = 0; iter < 100; ++iter) {
+      arr[iter] = r.nextInt(100);
+    }
+    System.out.println(Arrays.toString(arr));
+
+    new TestSelector(arr).select(0, 100, 15);
+    System.out.println(Arrays.toString(arr));
+    System.out.println(arr[15]);
+  }
+
+  // 缺一个性能测试.
+
+
+  public static class TestSelector extends IntroSelector{
+    Integer[] actual;
+    Integer pivot;
+
+    public TestSelector(Integer[] actual) {
+      this.actual = actual;
+    }
+
+    @Override
+    protected void swap(int i, int j) {
+      ArrayUtil.swap(actual, i, j);
+    }
+
+    @Override
+    protected void setPivot(int i) {
+      pivot = actual[i];
+    }
+
+    @Override
+    protected int comparePivot(int j) {
+      return pivot.compareTo(actual[j]);
+    }
+  }
 }

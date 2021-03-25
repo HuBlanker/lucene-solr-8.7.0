@@ -28,6 +28,14 @@ import java.util.Comparator;
 // 当递归的数量超过2log(n)的时候，会退回到中位数的中位数 !!!!! 这是一种保底的策略，防止找分割点耽误太久
   // 因此，　这个算法平均在线性时间内运行.
   // pivot 这个词语，一般是快速排序的那个分割点的名字，所以其实也是选择分割点咯
+  /*
+  看明白了后的注释:
+  主要使用的是,三者(头尾中间)中位数来作为分隔点.但是这种方法有极小的可能变成最坏的复杂度.
+  那么处理方法是, 如果递归了 2* lg(n)次. 还没结束, 之后找主元也就是分隔点, 就不用这个方法了.
+  用bfptr方法. 也就是中位数的中位数法.
+  为啥不一直用这个方法呢. 就是这个方法理论上不会有最坏的情况. 都是O(n). 但是常数可能比较大. 也不好一直用这个.
+   */
+
 public abstract class IntroSelector extends Selector {
 
   @Override
@@ -45,6 +53,7 @@ public abstract class IntroSelector extends Selector {
 
   // 这玩意又是一个递归的方法
   int medianOfMediansSelect(int left, int right, int k) {
+    // 这里是一个递归的左右某一边来回找的过程. 最终找到的一个是left=k
     do {
       // Defensive check, this is also checked in the calling
       // method. Including here so this method can be used
@@ -54,8 +63,11 @@ public abstract class IntroSelector extends Selector {
         return left;
       }
 
+      // 这个值是当前的通过中位数的中位数找到的分隔点.
       int pivotIndex = pivot(left, right);
+      // 这是实际操作后的分隔点
       pivotIndex = partition(left, right, k, pivotIndex);
+      // 如果分隔点正好是k, 那就是找到了
       if (k == pivotIndex) {
         return k;
       } else if (k < pivotIndex) {
@@ -67,8 +79,11 @@ public abstract class IntroSelector extends Selector {
     return left;
   }
 
+  // 进行了实际的左右分区操作
   private int partition(int left, int right, int k, int pivotIndex) {
+    // 以这个当做分隔点
     setPivot(pivotIndex);
+    // 分隔点放到最右边
     swap(pivotIndex, right);
     int storeIndex = left;
     for (int i = left; i < right; i++) {
@@ -96,6 +111,7 @@ public abstract class IntroSelector extends Selector {
   // 求分割点
   private int pivot(int left, int right) {
     // 左右范围在5以内的话, 插入排序搞一下，就找到中间点了
+    // 这里又是一个递归的结束条件
     if (right - left < 5) {
       int pivotIndex = partition5(left, right);
       return pivotIndex;
@@ -111,7 +127,9 @@ public abstract class IntroSelector extends Selector {
       // 把这次的中位数和xx交换一下
       swap(median5, left + ((i-left)/5));
     }
+    // 上面的东西搞完之后, left之后的几个, 全是原来的中位数
     int mid = ((right - left) / 10) + left + 1;
+    // 这里算的就是这一轮里,一共有多少个中位数,因为是递归的过程嘛,所以这里每次除以5的速度往下少的.
     int to = left + ((right - left)/5);
     return medianOfMediansSelect(left, to, mid);
   }
@@ -142,27 +160,32 @@ public abstract class IntroSelector extends Selector {
       return;
     }
 
-    // 最大深度为0,也就是不让我进行递归，直接走笨方法
+    // 最大深度-1
+    // 最大深度为0,也就是说,当前已经到了不能使用三者中位数的临界点了. 要使用稳妥的可能慢的方法.也就是中位数的中位数,是bfptr方法.
     if (--maxDepth < 0) {
       slowSelect(from, to, k);
       return;
     }
 
-    // 中间的哪个
+    // 中间的那个
     final int mid = (from + to) >>> 1;
     // heuristic: we use the median of the values at from, to-1 and mid as a pivot
+    // 如果第一个大于最后一个. 交换
     if (compare(from, to - 1) > 0) {
       swap(from, to - 1);
     }
+    // 中间这个和to-1, 谁大谁放在中间.
     if (compare(to - 1, mid) > 0) {
       swap(to - 1, mid);
+      // 左右两个放对位置
       if (compare(from, to - 1) > 0) {
         swap(from, to - 1);
       }
     }
-
+    // 到这里, to-1上放着的是三者中位数.
     setPivot(to - 1);
 
+    // 左右, 快排
     int left = from + 1;
     int right = to - 2;
 
@@ -184,6 +207,7 @@ public abstract class IntroSelector extends Selector {
     }
     swap(left, to - 1);
 
+    // 递归的进行快排
     if (left == k) {
       return;
     } else if (left < k) {
