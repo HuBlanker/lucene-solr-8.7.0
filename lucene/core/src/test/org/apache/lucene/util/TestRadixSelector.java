@@ -103,4 +103,66 @@ public class TestRadixSelector extends LuceneTestCase {
     }
   }
 
+  public void testHuyanSelect() {
+    BytesRef[] arr = new BytesRef[110];
+    int max = Integer.MAX_VALUE;
+    for (int i = 0; i < 110; i++) {
+      byte[] bytes = new byte[1];
+      bytes[0] = (byte) (110 - i);
+      max = Math.min(max, bytes.length);
+      arr[i] = new BytesRef(bytes);
+    }
+    System.out.println("max = " + max);
+    System.out.println("===============");
+    for (int i = 0; i < arr.length; i++) {
+      System.out.println(i + "\t" + (int) arr[i].bytes[0]);
+    }
+
+    new TestHuyanRadixSelector(1, arr, 1).select(0, 110, 15);
+
+    System.out.println("===============");
+    for (int i = 0; i < arr.length; i++) {
+      System.out.println(i + "\t" + (int) arr[i].bytes[0]);
+    }
+
+    System.out.println("===============");
+    System.out.println((int) arr[15].bytes[0]);
+
+  }
+
+
+  public static class TestHuyanRadixSelector extends RadixSelector {
+
+    // 字节数组的数组，对吧，相当于每一个元素都是一个字节数组呢
+    BytesRef[] actual;
+    int enforcedMaxLen;
+
+    public TestHuyanRadixSelector(int maxLength, BytesRef[] actual, int enforcedMaxLen) {
+      super(maxLength);
+      this.actual = actual;
+      this.enforcedMaxLen = enforcedMaxLen;
+    }
+
+    protected TestHuyanRadixSelector(int maxLength) {
+      super(maxLength);
+    }
+
+    @Override
+    protected void swap(int i, int j) {
+      ArrayUtil.swap(actual, i, j);
+    }
+
+    @Override
+    protected int byteAt(int i, int k) {
+      assertTrue(k < enforcedMaxLen);
+      BytesRef b = actual[i];
+      if (k >= b.length) {
+        return -1;
+      } else {
+        return Byte.toUnsignedInt(b.bytes[b.offset + k]);
+      }
+    }
+
+  }
+
 }
