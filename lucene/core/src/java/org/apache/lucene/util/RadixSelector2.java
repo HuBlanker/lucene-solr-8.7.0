@@ -25,7 +25,7 @@ import java.util.Arrays;
  *  // 大概类似于一个MSB的基数排序.
  *  但是只递归的处理包含有想要的值的子块.
  *  @lucene.internal */
-public abstract class RadixSelector extends Selector {
+public abstract class RadixSelector2 extends Selector {
 
   // after that many levels of recursion we fall back to introselect anyway
   // this is used as a protection against the fact that radix sort performs
@@ -64,7 +64,7 @@ public abstract class RadixSelector extends Selector {
    * @param maxLength the maximum length of keys, pass {@link Integer#MAX_VALUE} if unknown.
    *                  元素的最大长度
    */
-  protected RadixSelector(int maxLength) {
+  protected RadixSelector2(int maxLength) {
     this.maxLength = maxLength;
     this.commonPrefix = new int[Math.min(24, maxLength)];
   }
@@ -88,7 +88,7 @@ public abstract class RadixSelector extends Selector {
     return new IntroSelector() {
       @Override
       protected void swap(int i, int j) {
-        RadixSelector.this.swap(i, j);
+        RadixSelector2.this.swap(i, j);
       }
 
       @Override
@@ -157,7 +157,7 @@ public abstract class RadixSelector extends Selector {
     // 如果数据很少了，或者已经递归的太多了，是不是就换个策略，不要再递归了呢
     // 数据变窄了，超过递归深度了, 就使用备用的选择算法
 //    System.out.println("in");
-    if (to - from <= LENGTH_THRESHOLD || d >= LEVEL_THRESHOLD) {
+    if (to - from <= LENGTH_THRESHOLD || l >= LEVEL_THRESHOLD) {
 //      System.out.println("fall_back");
       getFallbackSelector(d).select(from, to, k);
     } else {
