@@ -182,7 +182,7 @@ public class BKDWriter implements Closeable {
     // 16.0
     this.maxMBSortInHeap = maxMBSortInHeap;
 
-    // point总数
+    // point总数，也是最大的数量?
     this.totalPointCount = totalPointCount;
     // segment.maxDoc
     this.maxDoc = maxDoc;
@@ -236,19 +236,24 @@ public class BKDWriter implements Closeable {
   }
 
   public void add(byte[] packedValue, int docID) throws IOException {
+    // 数据check
     if (packedValue.length != config.packedBytesLength) {
       throw new IllegalArgumentException("packedValue should be length=" + config.packedBytesLength + " (got: " + packedValue.length + ")");
     }
     if (pointCount >= totalPointCount) {
       throw new IllegalStateException("totalPointCount=" + totalPointCount + " was passed when we were created, but we just hit " + (pointCount + 1) + " values");
     }
+    // 初始化
     if (pointCount == 0) {
       initPointWriter();
       System.arraycopy(packedValue, 0, minPackedValue, 0, config.packedIndexBytesLength);
       System.arraycopy(packedValue, 0, maxPackedValue, 0, config.packedIndexBytesLength);
     } else {
+      // 每个维度进行写入
       for (int dim = 0; dim < config.numIndexDims; dim++) {
         int offset = dim * config.bytesPerDim;
+
+        // 进行最大最小值的写入
         if (FutureArrays.compareUnsigned(packedValue, offset, offset + config.bytesPerDim, minPackedValue, offset, offset + config.bytesPerDim) < 0) {
           System.arraycopy(packedValue, offset, minPackedValue, offset, config.bytesPerDim);
         } else if (FutureArrays.compareUnsigned(packedValue, offset, offset + config.bytesPerDim, maxPackedValue, offset, offset + config.bytesPerDim) > 0) {
@@ -256,8 +261,10 @@ public class BKDWriter implements Closeable {
         }
       }
     }
+    // 追加当前点
     pointWriter.append(packedValue, docID);
     pointCount++;
+    // 记录docId
     docsSeen.set(docID);
   }
 
