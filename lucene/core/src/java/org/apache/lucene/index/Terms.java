@@ -26,6 +26,8 @@ import org.apache.lucene.util.automaton.CompiledAutomaton;
 /**
  * Access to the terms in a specific field.  See {@link Fields}.
  * @lucene.experimental
+ *
+ * 某个域的词
  */
 
 public abstract class Terms {
@@ -37,6 +39,7 @@ public abstract class Terms {
 
   /** Returns an iterator that will step through all
    *  terms. This method will not return null. */
+  // 迭代器
   public abstract TermsEnum iterator() throws IOException;
 
   /** Returns a TermsEnum that iterates over all terms and

@@ -1069,7 +1069,7 @@ public class BKDWriter implements Closeable {
 
   /**
    * lastSplitValues is per-dimension split value previously seen; we use this to prefix-code the split byte[] on each inner node
-   * // 上一个切割垫是每个维度的切割垫，　我们使用这种前缀编码来编码每一个内部节点
+   * // 上一个切割点是每个维度的切割垫，　我们使用这种前缀编码来编码每一个内部节点
    * // 这个递归的玩意，必须一直到只有一个叶子才结束
    */
   // 递归的打包索引
@@ -1077,13 +1077,11 @@ public class BKDWriter implements Closeable {
                                byte[] lastSplitValues, boolean[] negativeDeltas, boolean isLeft, int leavesOffset, int numLeaves) throws IOException {
     // 只有一个叶子
     if (numLeaves == 1) {
-      // 一维的时候永远是false
       if (isLeft) {
         assert leafNodes.getLeafLP(leavesOffset) - minBlockFP == 0;
         // 只有一个叶子且是左叶子的话，就可以结束递归了
         return 0;
       } else {
-        // 增量, 这个值肯定是第一个叶子的偏移量，可能前面还写过其他的header什么的呢
         long delta = leafNodes.getLeafLP(leavesOffset) - minBlockFP;
         assert leafNodes.numLeaves() == numLeaves || delta > 0 : "expected delta > 0; got numLeaves =" + numLeaves + " and delta=" + delta;
 
@@ -1118,7 +1116,7 @@ public class BKDWriter implements Closeable {
       // 分割点
       final int splitOffset = rightOffset - 1;
 
-      // 获取切割维度[
+      // 获取切割维度
       int splitDim = leafNodes.getSplitDimension(splitOffset);
       // 切割点的数据
       BytesRef splitValue = leafNodes.getSplitValue(splitOffset);

@@ -341,6 +341,7 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
   }
 
   // writer
+  // 循环所有fields，每一个的域的所有terms写入
   @Override
   public void write(Fields fields, NormsProducer norms) throws IOException {
     //if (DEBUG) System.out.println("\nBTTW.write seg=" + segment);
@@ -351,12 +352,15 @@ public final class BlockTreeTermsWriter extends FieldsConsumer {
       lastField = field;
 
       //if (DEBUG) System.out.println("\nBTTW.write seg=" + segment + " field=" + field);
+      // Terms = FreqProxFields.FreqProxTerms
       Terms terms = fields.terms(field);
       if (terms == null) {
         continue;
       }
 
+      // Terms = FreqProxFields.FreqProxTermsEnum
       TermsEnum termsEnum = terms.iterator();
+      // BlockTreeTermsWriter
       TermsWriter termsWriter = new TermsWriter(fieldInfos.fieldInfo(field));
       while (true) {
         BytesRef term = termsEnum.next();

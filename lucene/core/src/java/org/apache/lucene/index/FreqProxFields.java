@@ -32,6 +32,7 @@ import org.apache.lucene.util.BytesRefBuilder;
  *  Fields} interface over the in-RAM buffered
  *  fields/terms/postings, to flush postings through the
  *  PostingsFormat. */
+// 给予内存的缓冲fields/词/倒排信息等,
 
 class FreqProxFields extends Fields {
   final Map<String,FreqProxTermsWriterPerField> fields = new LinkedHashMap<>();

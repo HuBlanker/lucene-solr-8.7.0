@@ -34,6 +34,7 @@ import org.apache.lucene.index.ReaderSlice;
  * actually do "something" with the postings (write it into
  * the index in a specific format).
  *
+ * 倒排表的生成
  * @lucene.experimental
  */
 
