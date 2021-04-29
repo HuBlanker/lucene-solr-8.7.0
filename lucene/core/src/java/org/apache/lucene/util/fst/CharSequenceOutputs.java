@@ -29,6 +29,8 @@ import org.apache.lucene.util.RamUsageEstimator;
  * is a sequence of characters.
  *
  * @lucene.experimental
+ *
+ * 字符数组的输出实现,主要还是common，add，Substract等方法.
  */
 
 public final class CharSequenceOutputs extends Outputs<CharsRef> {

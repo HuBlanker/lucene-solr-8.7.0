@@ -27,6 +27,8 @@ import org.apache.lucene.util.RamUsageEstimator;
  * An FST {@link Outputs} implementation, holding two other outputs.
  *
  * @lucene.experimental
+ *
+ * Pair的输出
  */
 
 public class PairOutputs<A,B> extends Outputs<PairOutputs.Pair<A,B>> {

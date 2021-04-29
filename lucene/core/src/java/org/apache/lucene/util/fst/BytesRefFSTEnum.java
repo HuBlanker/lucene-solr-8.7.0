@@ -26,6 +26,8 @@ import org.apache.lucene.util.BytesRef;
  *  FST.
  *
   * @lucene.experimental
+ *
+ * 列举所有输入输出. 相当于读取者， 一个遍历器
 */
 
 public final class BytesRefFSTEnum<T> extends FSTEnum<T> {

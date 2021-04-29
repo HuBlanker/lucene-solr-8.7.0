@@ -29,6 +29,8 @@ import org.apache.lucene.util.RamUsageEstimator;
  * is a sequence of ints.
  *
  * @lucene.experimental
+ *
+ * ints 序列的输出实现
  */
 
 public final class IntSequenceOutputs extends Outputs<IntsRef> {

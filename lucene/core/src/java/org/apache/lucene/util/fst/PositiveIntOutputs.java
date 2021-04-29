@@ -28,6 +28,8 @@ import org.apache.lucene.util.SuppressForbidden;
  * An FST {@link Outputs} implementation where each output
  * is a non-negative long value.
  *
+ * 不为空的long的输出
+ *
  * @lucene.experimental
  */
 @SuppressForbidden(reason = "Uses a Long instance as a marker")

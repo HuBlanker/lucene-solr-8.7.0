@@ -29,6 +29,10 @@ import org.apache.lucene.util.StringHelper;
  * An FST {@link Outputs} implementation where each output
  * is a sequence of bytes.
  *
+ * 输出值是字节序列，这里实现了common，add，subtract方法
+ *
+ * 就是弧上带有的输出值，是一个字节数组，的实现.
+ *
  * @lucene.experimental
  */
 

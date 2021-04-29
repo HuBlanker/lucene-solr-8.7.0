@@ -21,6 +21,7 @@ import java.io.IOException;
 
 /**
  * Static helper methods for {@link FST.Arc.BitTable}.
+ * // 工具类，类似于位图的一些操作而已
  *
  * @lucene.experimental
  */

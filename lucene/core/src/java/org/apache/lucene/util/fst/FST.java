@@ -61,6 +61,8 @@ import static org.apache.lucene.util.fst.FST.Arc.BitTable;
  *      documentation} for some simple examples.
  *
  * @lucene.experimental
+ *
+ * fst，用压缩的字节数组来存储
  */
 public final class FST<T> implements Accountable {
 
@@ -71,8 +73,11 @@ public final class FST<T> implements Accountable {
   private static final long BASE_RAM_BYTES_USED = RamUsageEstimator.shallowSizeOfInstance(FST.class);
   private static final long ARC_SHALLOW_RAM_BYTES_USED = RamUsageEstimator.shallowSizeOfInstance(Arc.class);
 
+  // 当前弧上的标签是某个输入的最后一个标签
   private static final int BIT_FINAL_ARC = 1 << 0;
+  // 当前弧线是node节点上的最后一个弧
   static final int BIT_LAST_ARC = 1 << 1;
+  // 下一个是终止字符???
   static final int BIT_TARGET_NEXT = 1 << 2;
 
   // TODO: we can free up a bit if we can nuke this:
@@ -132,40 +137,53 @@ public final class FST<T> implements Accountable {
   /** If arc has this label then that arc is final/accepted */
   public static final int END_LABEL = -1;
 
+  // 输入类型是几个字节的
   final INPUT_TYPE inputType;
 
   // if non-null, this FST accepts the empty string and
   // produces this output
+  // 空的输出，转换成FSA
   T emptyOutput;
 
   /** A {@link BytesStore}, used during building, or during reading when
    *  the FST is very large (more than 1 GB).  If the FST is less than 1
    *  GB then bytesArray is set instead. */
+  // 存储了一堆的字节数组
   final BytesStore bytes;
 
+  // fst实际存储？？？
   private final FSTStore fstStore;
 
   private long startNode = -1;
 
+  // 输出的类
   public final Outputs<T> outputs;
 
   /** Represents a single arc. */
+  // 一个弧
   public static final class Arc<T> {
 
     //*** Arc fields.
 
+    // 弧上的值
     private int label;
 
+    // 弧上带的输出
     private T output;
 
+    // 链接的目标点
     private long target;
 
+    // flags...
     private byte flags;
 
+    // 下一个结束的输出值吗？？
     private T nextFinalOutput;
 
+    // 下一个弧，怎么记录
     private long nextArc;
 
+    //
     private byte nodeFlags;
 
     //*** Fields for arcs belonging to a node with fixed length arcs.
@@ -186,6 +204,7 @@ public final class FST<T> implements Accountable {
     private long bitTableStart;
 
     /** First label of a direct addressing node. */
+    // 第一个标签
     private int firstLabel;
 
     /**
@@ -194,6 +213,7 @@ public final class FST<T> implements Accountable {
      * to the number of bits set before the bit at {@link #arcIdx} in the bit-table. This field is a cache to avoid
      * to count bits set repeatedly when iterating the next arcs.
      */
+    // 存在的index
     private int presenceIndex;
 
     /** Returns this */
@@ -286,6 +306,7 @@ public final class FST<T> implements Accountable {
 
     /** Address (into the byte[]) of the next arc - only for list of variable length arc.
      * Or ord/address to the next node if label == {@link #END_LABEL}. */
+    // 好他妈的复杂啊
      long nextArc() {
       return nextArc;
     }
@@ -394,6 +415,7 @@ public final class FST<T> implements Accountable {
   }
 
   // make a new empty FST, for building; Builder invokes this
+  // 构造一颗FST
   FST(INPUT_TYPE inputType, Outputs<T> outputs, int bytesPageBits) {
     this.inputType = inputType;
     this.outputs = outputs;
@@ -414,6 +436,7 @@ public final class FST<T> implements Accountable {
 
   /** Load a previously saved FST; maxBlockBits allows you to
    *  control the size of the byte[] pages used to hold the FST bytes. */
+  // 从磁盘上加载一个FST
   public FST(DataInput metaIn, DataInput in, Outputs<T> outputs, FSTStore fstStore) throws IOException {
     bytes = null;
     this.fstStore = fstStore;
@@ -483,6 +506,7 @@ public final class FST<T> implements Accountable {
     if (startNode != -1) {
       throw new IllegalStateException("already finished");
     }
+    // 最后的节点?
     if (newStartNode == FINAL_END_NODE && emptyOutput != null) {
       newStartNode = 0;
     }
@@ -611,20 +635,25 @@ public final class FST<T> implements Accountable {
 
   // serializes new node by appending its bytes to the end
   // of the current byte[]
+  // 把一个节点的值append到图里
   long addNode(Builder<T> builder, Builder.UnCompiledNode<T> nodeIn) throws IOException {
     T NO_OUTPUT = outputs.getNoOutput();
 
     //System.out.println("FST.addNode pos=" + bytes.getPosition() + " numArcs=" + nodeIn.numArcs);
+    // 没有弧，那就是终点
     if (nodeIn.numArcs == 0) {
       if (nodeIn.isFinal) {
         return FINAL_END_NODE;
       } else {
+        // 没有弧又不是终点，扯呢
         return NON_FINAL_END_NODE;
       }
     }
+    // 开始的字节position
     final long startAddress = builder.bytes.getPosition();
     //System.out.println("  startAddr=" + startAddress);
 
+    // 是否使用固定长度来存储弧
     final boolean doFixedLengthArcs = shouldExpandNodeWithFixedLengthArcs(builder, nodeIn);
     if (doFixedLengthArcs) {
       //System.out.println("  fixed length arcs");
@@ -638,9 +667,13 @@ public final class FST<T> implements Accountable {
     
     final int lastArc = nodeIn.numArcs-1;
 
+    // 最后一个弧的起始位置
     long lastArcStart = builder.bytes.getPosition();
+
     int maxBytesPerArc = 0;
     int maxBytesPerArcWithoutLabel = 0;
+
+    // 每一个弧
     for(int arcIdx=0; arcIdx < nodeIn.numArcs; arcIdx++) {
       final Builder.Arc<T> arc = nodeIn.arcs[arcIdx];
       final Builder.CompiledNode target = (Builder.CompiledNode) arc.target;
@@ -677,26 +710,33 @@ public final class FST<T> implements Accountable {
         flags += BIT_ARC_HAS_OUTPUT;
       }
 
+      // 计算了一堆的flag，加起来之后是个byte. 写入到当前的字节数组里面去，字节数组完了会清一下的
+      // 只能说牛逼
       builder.bytes.writeByte((byte) flags);
       long labelStart = builder.bytes.getPosition();
+
+      // 写一个label
       writeLabel(builder.bytes, arc.label);
       int numLabelBytes = (int) (builder.bytes.getPosition() - labelStart);
 
       // System.out.println("  write arc: label=" + (char) arc.label + " flags=" + flags + " target=" + target.node + " pos=" + bytes.getPosition() + " output=" + outputs.outputToString(arc.output));
 
       if (arc.output != NO_OUTPUT) {
+        // 写一下output
         outputs.write(arc.output, builder.bytes);
         //System.out.println("    write output");
       }
 
       if (arc.nextFinalOutput != NO_OUTPUT) {
         //System.out.println("    write final output");
+        // 写一个nextFinalOutPut进去
         outputs.writeFinalOutput(arc.nextFinalOutput, builder.bytes);
       }
 
       if (targetHasArcs && (flags & BIT_TARGET_NEXT) == 0) {
         assert target.node > 0;
         //System.out.println("    write target");
+        // node, 写进去
         builder.bytes.writeVLong(target.node);
       }
 
@@ -749,7 +789,10 @@ public final class FST<T> implements Accountable {
     }
 
     final long thisNodeAddress = builder.bytes.getPosition()-1;
+    // reverse 是他吗的啥
+    // 所谓的node，要么是-1,要么就是在字节数组中的下标值
     builder.bytes.reverse(startAddress, thisNodeAddress);
+    // count
     builder.nodeCount++;
     return thisNodeAddress;
   }
@@ -762,6 +805,10 @@ public final class FST<T> implements Accountable {
    * Nodes with fixed length arcs use more space, because they encode all arcs with a fixed number
    * of bytes, but they allow either binary search or direct addressing on the arcs (instead of linear
    * scan) on lookup by arc label.
+   *
+   * 返回是否应该使用固定长度的弧来扩展给定节点.
+   *
+   * 具有固定长度弧的节点会使用更多空间，因为它们会使用固定数量的字节对所有弧进行编码，但是它们允许通过弧形标签查找时对弧进行二进制搜索或直接寻址（而不是线性扫描）
    */
   private boolean shouldExpandNodeWithFixedLengthArcs(Builder<T> builder, Builder.UnCompiledNode<T> node) {
     return builder.allowFixedLengthArcs &&

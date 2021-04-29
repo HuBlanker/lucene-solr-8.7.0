@@ -32,8 +32,10 @@ import static org.apache.lucene.util.fst.FST.Arc.BitTable;
 abstract class FSTEnum<T> {
   protected final FST<T> fst;
 
+  // 一堆弧
   @SuppressWarnings({"rawtypes","unchecked"}) protected FST.Arc<T>[] arcs = new FST.Arc[10];
   // outputs are cumulative
+  // 输出是累积的，啥意思
   @SuppressWarnings({"rawtypes","unchecked"}) protected T[] output = (T[]) new Object[10];
 
   protected final T NO_OUTPUT;

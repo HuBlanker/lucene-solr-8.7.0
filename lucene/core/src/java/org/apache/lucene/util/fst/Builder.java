@@ -23,7 +23,7 @@ import org.apache.lucene.store.ByteArrayDataOutput;
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.IntsRef;
 import org.apache.lucene.util.IntsRefBuilder;
-import org.apache.lucene.util.fst.FST.INPUT_TYPE; // javadoc
+import org.apache.lucene.util.fst.FST.INPUT_TYPE;
 
 // TODO: could we somehow stream an FST to disk while we
 // build it?
@@ -45,6 +45,21 @@ import org.apache.lucene.util.fst.FST.INPUT_TYPE; // javadoc
  * <p>FSTs larger than 2.1GB are now possible (as of Lucene
  * 4.2).  FSTs containing more than 2.1B nodes are also now
  * possible, however they cannot be packed.
+ *
+ * 构造一个最小的FST，最小由输入有序来保证. 来映射IntsRef到任意一个输出.
+ * <br/>
+ * FST如果你不给输出，那就变成了FSA.
+ * <br/>
+ * FST使用压缩序列化，成为字节数组，可以存储到磁盘，也可以读取出来。可以直接进行遍历. FST永远是有限的，也就是无环.
+ *
+ * <br/>
+ * 算法在xxx。
+ * <br/>
+ * 参数T是输出类型.
+ *
+ * <br/>
+ * FSTs大于2.1GB现在是支持的了。
+ *
  *
  * @lucene.experimental
  */
@@ -72,17 +87,35 @@ public class Builder<T> {
    * to evaluate a change.
    *
    * @see #setDirectAddressingMaxOversizingFactor
+   *
+   * 扩容因子
+   * <br/>
+   * 这个因子决定了什么时候使用直接寻址来编码node，什么时候使用二分搜索. 默认是1.
+   *
+   * <br/>
+   * 该因素不能确定是使用可变长度弧还是固定长度弧对节点进行编码。它仅确定已知以固定长度弧进行编码的节点的有效编码。
+   *
+   * <br/>
+   *  我们测试过217k的英语单词，只有3.27%的节点是固定长度的弧. 并且其中的99.99%是直接寻址的，全面少了FST的内存消耗1.67%.
+   *
+   *  最坏的case，我们测试了168K个节点， 50%是固定长度的弧， 并且14%可以直接编码，0.8%.
+   *
+   *
+   *
    */
   static final float DIRECT_ADDRESSING_MAX_OVERSIZING_FACTOR = 1.0f;
 
   private final NodeHash<T> dedupHash;
   final FST<T> fst;
+
+  // no_output 的标志位
   private final T NO_OUTPUT;
 
   // private static final boolean DEBUG = true;
 
   // simplistic pruning: we prune node (and all following
   // nodes) if less than this number of terms go through it:
+  // 简化修剪过程，如果小于这个数的节点，就直接修剪??
   private final int minSuffixCount1;
 
   // better pruning: we prune node (and all following
@@ -99,6 +132,7 @@ public class Builder<T> {
   // in build performance on 9.8M Wikipedia terms; so we
   // left this as an array:
   // current "frontier"
+  // 换成ArrayList损失了大约6%的性能
   private UnCompiledNode<T>[] frontier;
 
   // Used for the BIT_TARGET_NEXT optimization (whereby
@@ -135,48 +169,49 @@ public class Builder<T> {
   /**
    * Instantiates an FST/FSA builder with all the possible tuning and construction
    * tweaks. Read parameter documentation carefully.
-   * 
-   * @param inputType 
-   *    The input type (transition labels). Can be anything from {@link INPUT_TYPE}
-   *    enumeration. Shorter types will consume less memory. Strings (character sequences) are 
-   *    represented as {@link INPUT_TYPE#BYTE4} (full unicode codepoints). 
-   *     
-   * @param minSuffixCount1
-   *    If pruning the input graph during construction, this threshold is used for telling
-   *    if a node is kept or pruned. If transition_count(node) &gt;= minSuffixCount1, the node
-   *    is kept. 
-   *    
-   * @param minSuffixCount2
-   *    (Note: only Mike McCandless knows what this one is really doing...) 
-   * 
-   * @param doShareSuffix 
-   *    If <code>true</code>, the shared suffixes will be compacted into unique paths.
-   *    This requires an additional RAM-intensive hash map for lookups in memory. Setting this parameter to
-   *    <code>false</code> creates a single suffix path for all input sequences. This will result in a larger
-   *    FST, but requires substantially less memory and CPU during building.  
    *
-   * @param doShareNonSingletonNodes
-   *    Only used if doShareSuffix is true.  Set this to
-   *    true to ensure FST is fully minimal, at cost of more
-   *    CPU and more RAM during building.
-   *
-   * @param shareMaxTailLength
-   *    Only used if doShareSuffix is true.  Set this to
-   *    Integer.MAX_VALUE to ensure FST is fully minimal, at cost of more
-   *    CPU and more RAM during building.
-   *
-   * @param outputs The output type for each input sequence. Applies only if building an FST. For
-   *    FSA, use {@link NoOutputs#getSingleton()} and {@link NoOutputs#getNoOutput()} as the
-   *    singleton output object.
-   *
-   * @param allowFixedLengthArcs Pass false to disable the fixed length arc optimization (binary search or
-   *    direct addressing) while building the FST; this will make the resulting FST smaller but slower to
-   *    traverse.
-   *
-   * @param bytesPageBits How many bits wide to make each
-   *    byte[] block in the BytesStore; if you know the FST
-   *    will be large then make this larger.  For example 15
-   *    bits = 32768 byte pages.
+   * @param inputType                The input type (transition labels). Can be anything from {@link INPUT_TYPE}
+   *                                 enumeration. Shorter types will consume less memory. Strings (character sequences) are
+   *                                 represented as {@link INPUT_TYPE#BYTE4} (full unicode codepoints).
+   *                                 <p>
+   *                                 输入类型，字节长短， 越短内存占用越少呗
+   * @param minSuffixCount1          If pruning the input graph during construction, this threshold is used for telling
+   *                                 if a node is kept or pruned. If transition_count(node) &gt;= minSuffixCount1, the node
+   *                                 is kept.
+   *                                 一个阈值，用来控制修剪的时候， 这个节点是保留还是修剪掉
+   * @param minSuffixCount2          (Note: only Mike McCandless knows what this one is really doing...)
+   * @param doShareSuffix            If <code>true</code>, the shared suffixes will be compacted into unique paths.
+   *                                 This requires an additional RAM-intensive hash map for lookups in memory. Setting this parameter to
+   *                                 <code>false</code> creates a single suffix path for all input sequences. This will result in a larger
+   *                                 FST, but requires substantially less memory and CPU during building.
+   *                                 如果为true. 共享的后缀将会压缩到不同的path了？？
+   *                                 <br/>
+   *                                 这需要一个额外的内存密集的哈希表来进行查找.
+   *                                 <p>
+   *                                 <br/>
+   *                                 这个参数为false. 对所有的输入序列创建一个单独的后缀路径，这将会导致一个比较大的FST，但是在构建过程中省一些内存和CPU.
+   * @param doShareNonSingletonNodes Only used if doShareSuffix is true.  Set this to
+   *                                 true to ensure FST is fully minimal, at cost of more
+   *                                 CPU and more RAM during building.
+   *                                 当共享后缀的时候设置为true，意味着确定要搞一个最小的FST，会多花点CPU和内存
+   * @param shareMaxTailLength       Only used if doShareSuffix is true.  Set this to
+   *                                 Integer.MAX_VALUE to ensure FST is fully minimal, at cost of more
+   *                                 CPU and more RAM during building.
+   *                                 共享后缀的设置，最大的后缀共享长度？
+   * @param outputs                  The output type for each input sequence. Applies only if building an FST. For
+   *                                 FSA, use {@link NoOutputs#getSingleton()} and {@link NoOutputs#getNoOutput()} as the
+   *                                 singleton output object.
+   *                                 输出类型，如果是FST就有，FSA就没有这个参数， 确实NOOUTPUT。
+   * @param allowFixedLengthArcs     Pass false to disable the fixed length arc optimization (binary search or
+   *                                 direct addressing) while building the FST; this will make the resulting FST smaller but slower to
+   *                                 traverse.
+   *                                 一个什么优化，会导致FST更小但是遍历更慢
+   * @param bytesPageBits            How many bits wide to make each
+   *                                 byte[] block in the BytesStore; if you know the FST
+   *                                 will be large then make this larger.  For example 15
+   *                                 bits = 32768 byte pages.
+   *                                 一页的bit数两?
+   *                                 每个字节数组块的字节宽度，如果你知道FST比较大， 这个参数就设置大一点。
    */
   public Builder(FST.INPUT_TYPE inputType, int minSuffixCount1, int minSuffixCount2, boolean doShareSuffix,
                  boolean doShareNonSingletonNodes, int shareMaxTailLength, Outputs<T> outputs,
@@ -194,12 +229,13 @@ public class Builder<T> {
     } else {
       dedupHash = null;
     }
+
     NO_OUTPUT = outputs.getNoOutput();
 
-    @SuppressWarnings({"rawtypes","unchecked"}) final UnCompiledNode<T>[] f =
+    @SuppressWarnings({"rawtypes", "unchecked"}) final UnCompiledNode<T>[] f =
         (UnCompiledNode<T>[]) new UnCompiledNode[10];
     frontier = f;
-    for(int idx=0;idx<frontier.length;idx++) {
+    for (int idx = 0; idx < frontier.length; idx++) {
       frontier[idx] = new UnCompiledNode<>(this, idx);
     }
   }
@@ -231,9 +267,9 @@ public class Builder<T> {
 
   public long getNodeCount() {
     // 1+ in order to count the -1 implicit final node
-    return 1+nodeCount;
+    return 1 + nodeCount;
   }
-  
+
   public long getArcCount() {
     return arcCount;
   }
@@ -242,6 +278,8 @@ public class Builder<T> {
     return dedupHash == null ? 0 : nodeCount;
   }
 
+  // 如何将一个没有编译的节点，变成编译了的节点
+  // 编译的意思，就是真的放到fst里面去了
   private CompiledNode compileNode(UnCompiledNode<T> nodeIn, int tailLength) throws IOException {
     final long node;
     long bytesPosStart = bytes.getPosition();
@@ -271,17 +309,21 @@ public class Builder<T> {
     return fn;
   }
 
+  // 冻结尾巴
+  // 除了公共前缀，把屁股后面的全给编译进去
   private void freezeTail(int prefixLenPlus1) throws IOException {
     //System.out.println("  compileTail " + prefixLenPlus1);
+    // 更像是冻结除公共前缀之外的部分
     final int downTo = Math.max(1, prefixLenPlus1);
-    for(int idx=lastInput.length(); idx >= downTo; idx--) {
+    for (int idx = lastInput.length(); idx >= downTo; idx--) {
 
       boolean doPrune = false;
       boolean doCompile = false;
 
       final UnCompiledNode<T> node = frontier[idx];
-      final UnCompiledNode<T> parent = frontier[idx-1];
+      final UnCompiledNode<T> parent = frontier[idx - 1];
 
+      // 算一堆数据需要不需要修剪啥的
       if (node.inputCount < minSuffixCount1) {
         doPrune = true;
         doCompile = true;
@@ -313,24 +355,26 @@ public class Builder<T> {
 
       //System.out.println("    label=" + ((char) lastInput.ints[lastInput.offset+idx-1]) + " idx=" + idx + " inputCount=" + frontier[idx].inputCount + " doCompile=" + doCompile + " doPrune=" + doPrune);
 
+      // 某些情况， 干掉所有弧
       if (node.inputCount < minSuffixCount2 || (minSuffixCount2 == 1 && node.inputCount == 1 && idx > 1)) {
         // drop all arcs
-        for(int arcIdx=0;arcIdx<node.numArcs;arcIdx++) {
-          @SuppressWarnings({"rawtypes","unchecked"}) final UnCompiledNode<T> target =
-          (UnCompiledNode<T>) node.arcs[arcIdx].target;
+        for (int arcIdx = 0; arcIdx < node.numArcs; arcIdx++) {
+          @SuppressWarnings({"rawtypes", "unchecked"}) final UnCompiledNode<T> target =
+              (UnCompiledNode<T>) node.arcs[arcIdx].target;
           target.clear();
         }
         node.numArcs = 0;
       }
 
+      // 要修剪，就干掉的node.并且给父节点删除最后一个
       if (doPrune) {
         // this node doesn't make it -- deref it
         node.clear();
-        parent.deleteLast(lastInput.intAt(idx-1), node);
+        parent.deleteLast(lastInput.intAt(idx - 1), node);
       } else {
 
         if (minSuffixCount2 != 0) {
-          compileAllTargets(node, lastInput.length()-idx);
+          compileAllTargets(node, lastInput.length() - idx);
         }
         final T nextFinalOutput = node.output;
 
@@ -345,19 +389,19 @@ public class Builder<T> {
           // this node makes it and we now compile it.  first,
           // compile any targets that were previously
           // undecided:
-          parent.replaceLast(lastInput.intAt(idx-1),
-                             compileNode(node, 1+lastInput.length()-idx),
-                             nextFinalOutput,
-                             isFinal);
+          parent.replaceLast(lastInput.intAt(idx - 1),
+              compileNode(node, 1 + lastInput.length() - idx),
+              nextFinalOutput,
+              isFinal);
         } else {
           // replaceLast just to install
           // nextFinalOutput/isFinal onto the arc
-          parent.replaceLast(lastInput.intAt(idx-1),
-                             node,
-                             nextFinalOutput,
-                             isFinal);
+          parent.replaceLast(lastInput.intAt(idx - 1),
+              node,
+              nextFinalOutput,
+              isFinal);
           // this node will stay in play for now, since we are
-          // undecided on whether to prune it.  later, it
+          // undecided on whether to prune it.  later ij
           // will be either compiled or pruned, so we must
           // allocate a new node:
           frontier[idx] = new UnCompiledNode<>(this, idx);
@@ -377,17 +421,21 @@ public class Builder<T> {
   }
   */
 
-  /** Add the next input/output pair.  The provided input
-   *  must be sorted after the previous one according to
-   *  {@link IntsRef#compareTo}.  It's also OK to add the same
-   *  input twice in a row with different outputs, as long
-   *  as {@link Outputs} implements the {@link Outputs#merge}
-   *  method. Note that input is fully consumed after this
-   *  method is returned (so caller is free to reuse), but
-   *  output is not.  So if your outputs are changeable (eg
-   *  {@link ByteSequenceOutputs} or {@link
-   *  IntSequenceOutputs}) then you cannot reuse across
-   *  calls. */
+  /**
+   * Add the next input/output pair.  The provided input
+   * must be sorted after the previous one according to
+   * {@link IntsRef#compareTo}.  It's also OK to add the same
+   * input twice in a row with different outputs, as long
+   * as {@link Outputs} implements the {@link Outputs#merge}
+   * method. Note that input is fully consumed after this
+   * method is returned (so caller is free to reuse), but
+   * output is not.  So if your outputs are changeable (eg
+   * {@link ByteSequenceOutputs} or {@link
+   * IntSequenceOutputs}) then you cannot reuse across
+   * calls.
+   * 添加一个输入输出对，输入必须是有序的，和上一个有序，也可以一样. 只要输出实现了merge方法
+   * 注意输入在这个方法执行完就已经被彻底消费了，但是输出不是，所以如果你的输出改变了，那你就不可以重新调用了
+   */
   public void add(IntsRef input, T output) throws IOException {
     /*
     if (DEBUG) {
@@ -405,14 +453,17 @@ public class Builder<T> {
     */
 
     // De-dup NO_OUTPUT since it must be a singleton:
+    // 没有输出， 此时变成了一个FSA
     if (output.equals(NO_OUTPUT)) {
       output = NO_OUTPUT;
     }
 
-    assert lastInput.length() == 0 || input.compareTo(lastInput.get()) >= 0: "inputs are added out of order lastInput=" + lastInput.get() + " vs input=" + input;
+    // 有序的输入
+    assert lastInput.length() == 0 || input.compareTo(lastInput.get()) >= 0 : "inputs are added out of order lastInput=" + lastInput.get() + " vs input=" + input;
     assert validOutput(output);
 
     //System.out.println("\nadd: " + input);
+    // 第一个节点，是没有值的？？
     if (input.length == 0) {
       // empty input: only allowed as first input.  we have
       // to special case this because the packed FST
@@ -427,9 +478,13 @@ public class Builder<T> {
 
     // compare shared prefix length
     int pos1 = 0;
+    // 输入的偏移量
     int pos2 = input.offset;
+    // 输入的长度 input.length
+    // 上一个输入和现在的输入的长度最小值
     final int pos1Stop = Math.min(lastInput.length(), input.length);
-    while(true) {
+    while (true) {
+      // 前缀上的一些点计数＋1
       frontier[pos1].inputCount++;
       //System.out.println("  incr " + pos1 + " ct=" + frontier[pos1].inputCount + " n=" + frontier[pos1]);
       if (pos1 >= pos1Stop || lastInput.intAt(pos1) != input.ints[pos2]) {
@@ -438,11 +493,14 @@ public class Builder<T> {
       pos1++;
       pos2++;
     }
-    final int prefixLenPlus1 = pos1+1;
-      
-    if (frontier.length < input.length+1) {
-      final UnCompiledNode<T>[] next = ArrayUtil.grow(frontier, input.length+1);
-      for(int idx=frontier.length;idx<next.length;idx++) {
+    // 公共前缀长度+1
+    final int prefixLenPlus1 = pos1 + 1;
+
+    // 长度不够了，frontier其实是个暂时的，存放一些还没有被冻住的节点
+    // 长度不够了， 扩容
+    if (frontier.length < input.length + 1) {
+      final UnCompiledNode<T>[] next = ArrayUtil.grow(frontier, input.length + 1);
+      for (int idx = frontier.length; idx < next.length; idx++) {
         next[idx] = new UnCompiledNode<>(this, idx);
       }
       frontier = next;
@@ -453,23 +511,28 @@ public class Builder<T> {
     freezeTail(prefixLenPlus1);
 
     // init tail states for current input
-    for(int idx=prefixLenPlus1;idx<=input.length;idx++) {
-      frontier[idx-1].addArc(input.ints[input.offset + idx - 1],
-                             frontier[idx]);
+    // 初始化当前输入的尾部一些节点
+    for (int idx = prefixLenPlus1; idx <= input.length; idx++) {
+      // 每个节点的弧的目标就是下一个节点，也就是当前输入ints的下一个int
+      frontier[idx - 1].addArc(input.ints[input.offset + idx - 1],
+          frontier[idx]);
+      // 每个能到当前节点的，就+1？
       frontier[idx].inputCount++;
     }
 
     final UnCompiledNode<T> lastNode = frontier[input.length];
     if (lastInput.length() != input.length || prefixLenPlus1 != input.length + 1) {
+      // 标志当前输入的最后一个节点为终止节点
       lastNode.isFinal = true;
       lastNode.output = NO_OUTPUT;
     }
 
     // push conflicting outputs forward, only as far as
     // needed
-    for(int idx=1;idx<prefixLenPlus1;idx++) {
+    // 如果有必要，解决冲突的outputs.
+    for (int idx = 1; idx < prefixLenPlus1; idx++) {
       final UnCompiledNode<T> node = frontier[idx];
-      final UnCompiledNode<T> parentNode = frontier[idx-1];
+      final UnCompiledNode<T> parentNode = frontier[idx - 1];
 
       final T lastOutput = parentNode.getLastOutput(input.ints[input.offset + idx - 1]);
       assert validOutput(lastOutput);
@@ -482,7 +545,9 @@ public class Builder<T> {
         assert validOutput(commonOutputPrefix);
         wordSuffix = fst.outputs.subtract(lastOutput, commonOutputPrefix);
         assert validOutput(wordSuffix);
+        // 公共前缀给父节点
         parentNode.setLastOutput(input.ints[input.offset + idx - 1], commonOutputPrefix);
+        // 当前节点拿剩下的, 且当前节点的所有弧线，都加上这个后缀
         node.prependOutput(wordSuffix);
       } else {
         commonOutputPrefix = wordSuffix = NO_OUTPUT;
@@ -492,17 +557,21 @@ public class Builder<T> {
       assert validOutput(output);
     }
 
-    if (lastInput.length() == input.length && prefixLenPlus1 == 1+input.length) {
+    // 如果上一次的输入和这一次的一样，就把output合并起来
+    if (lastInput.length() == input.length && prefixLenPlus1 == 1 + input.length) {
       // same input more than 1 time in a row, mapping to
       // multiple outputs
       lastNode.output = fst.outputs.merge(lastNode.output, output);
     } else {
       // this new arc is private to this new input; set its
       // arc output to the leftover output:
-      frontier[prefixLenPlus1-1].setLastOutput(input.ints[input.offset + prefixLenPlus1-1], output);
+      // 相当于把输出，放在不是公共前缀之后的第一个节点上
+      // 如果和上一个完全不一样， 这里其实就相当于放在了第一个上.
+      frontier[prefixLenPlus1 - 1].setLastOutput(input.ints[input.offset + prefixLenPlus1 - 1], output);
     }
 
     // save last input
+    // 保存上一个输入
     lastInput.copyInts(input);
 
     //System.out.println("  count[0]=" + frontier[0].inputCount);
@@ -512,48 +581,59 @@ public class Builder<T> {
     return output == NO_OUTPUT || !output.equals(NO_OUTPUT);
   }
 
-  /** Returns final FST.  NOTE: this will return null if
-   *  nothing is accepted by the FST. */
+  /**
+   * Returns final FST.  NOTE: this will return null if
+   * nothing is accepted by the FST.
+   */
   public FST<T> finish() throws IOException {
 
+    // 根节点
     final UnCompiledNode<T> root = frontier[0];
 
     // minimize nodes in the last word's suffix
+    // 把所有的节点全部编译进fst里面去
     freezeTail(0);
+
     if (root.inputCount < minSuffixCount1 || root.inputCount < minSuffixCount2 || root.numArcs == 0) {
       if (fst.emptyOutput == null) {
+        // 空图
         return null;
       } else if (minSuffixCount1 > 0 || minSuffixCount2 > 0) {
         // empty string got pruned
+        // 空的
         return null;
       }
     } else {
       if (minSuffixCount2 != 0) {
+        // 编译根节点的所有下一个节点， 这个节点就是第一层的所有节点
         compileAllTargets(root, lastInput.length());
       }
     }
     //if (DEBUG) System.out.println("  builder.finish root.isFinal=" + root.isFinal + " root.output=" + root.output);
+    // 这啥啊
     fst.finish(compileNode(root, lastInput.length()).node);
 
     return fst;
   }
 
   private void compileAllTargets(UnCompiledNode<T> node, int tailLength) throws IOException {
-    for(int arcIdx=0;arcIdx<node.numArcs;arcIdx++) {
+    for (int arcIdx = 0; arcIdx < node.numArcs; arcIdx++) {
       final Arc<T> arc = node.arcs[arcIdx];
       if (!arc.target.isCompiled()) {
         // not yet compiled
-        @SuppressWarnings({"rawtypes","unchecked"}) final UnCompiledNode<T> n = (UnCompiledNode<T>) arc.target;
+        @SuppressWarnings({"rawtypes", "unchecked"}) final UnCompiledNode<T> n = (UnCompiledNode<T>) arc.target;
         if (n.numArcs == 0) {
           //System.out.println("seg=" + segment + "        FORCE final arc=" + (char) arc.label);
           arc.isFinal = n.isFinal = true;
         }
-        arc.target = compileNode(n, tailLength-1);
+        arc.target = compileNode(n, tailLength - 1);
       }
     }
   }
 
-  /** Expert: holds a pending (seen but not yet serialized) arc. */
+  /**
+   * Expert: holds a pending (seen but not yet serialized) arc.
+   */
   public static class Arc<T> {
     public int label;                             // really an "unsigned" byte
     public Node target;
@@ -576,13 +656,16 @@ public class Builder<T> {
 
   static final class CompiledNode implements Node {
     long node;
+
     @Override
     public boolean isCompiled() {
       return true;
     }
   }
 
-  /** Expert: holds a pending (seen but not yet serialized) Node. */
+  /**
+   * Expert: holds a pending (seen but not yet serialized) Node.
+   */
   public static final class UnCompiledNode<T> implements Node {
     final Builder<T> owner;
     public int numArcs;
@@ -593,18 +676,20 @@ public class Builder<T> {
     // code here...
     public T output;
     public boolean isFinal;
+    // 计数器？？？
     public long inputCount;
 
-    /** This node's depth, starting from the automaton root. */
+    /**
+     * This node's depth, starting from the automaton root.
+     */
     public final int depth;
 
     /**
-     * @param depth
-     *          The node's depth starting from the automaton root. Needed for
-     *          LUCENE-2934 (node expansion based on conditions other than the
-     *          fanout size).
+     * @param depth The node's depth starting from the automaton root. Needed for
+     *              LUCENE-2934 (node expansion based on conditions other than the
+     *              fanout size).
      */
-    @SuppressWarnings({"rawtypes","unchecked"})
+    @SuppressWarnings({"rawtypes", "unchecked"})
     public UnCompiledNode(Builder<T> owner, int depth) {
       this.owner = owner;
       arcs = (Arc<T>[]) new Arc[1];
@@ -628,18 +713,23 @@ public class Builder<T> {
       // for nodes on the frontier (even when reused).
     }
 
+    // 上一个输出
     public T getLastOutput(int labelToMatch) {
       assert numArcs > 0;
-      assert arcs[numArcs-1].label == labelToMatch;
-      return arcs[numArcs-1].output;
+      assert arcs[numArcs - 1].label == labelToMatch;
+      return arcs[numArcs - 1].output;
     }
 
+    // 添加一条弧
     public void addArc(int label, Node target) {
       assert label >= 0;
-      assert numArcs == 0 || label > arcs[numArcs-1].label: "arc[numArcs-1].label=" + arcs[numArcs-1].label + " new label=" + label + " numArcs=" + numArcs;
+      assert numArcs == 0 || label > arcs[numArcs - 1].label : "arc[numArcs-1].label=" + arcs[numArcs - 1].label + " new label=" + label + " numArcs=" + numArcs;
+
+      // 弧边的数量
       if (numArcs == arcs.length) {
-        final Arc<T>[] newArcs = ArrayUtil.grow(arcs, numArcs+1);
-        for(int arcIdx=numArcs;arcIdx<newArcs.length;arcIdx++) {
+        // 扩容,加一个弧, 但是弧的数组是指数级扩大的.
+        final Arc<T>[] newArcs = ArrayUtil.grow(arcs, numArcs + 1);
+        for (int arcIdx = numArcs; arcIdx < newArcs.length; arcIdx++) {
           newArcs[arcIdx] = new Arc<>();
         }
         arcs = newArcs;
@@ -651,36 +741,41 @@ public class Builder<T> {
       arc.isFinal = false;
     }
 
+    // 替换最后一条弧
     public void replaceLast(int labelToMatch, Node target, T nextFinalOutput, boolean isFinal) {
       assert numArcs > 0;
-      final Arc<T> arc = arcs[numArcs-1];
-      assert arc.label == labelToMatch: "arc.label=" + arc.label + " vs " + labelToMatch;
+      final Arc<T> arc = arcs[numArcs - 1];
+      assert arc.label == labelToMatch : "arc.label=" + arc.label + " vs " + labelToMatch;
       arc.target = target;
       //assert target.node != -2;
       arc.nextFinalOutput = nextFinalOutput;
       arc.isFinal = isFinal;
     }
 
+    // 删除最后一条弧
     public void deleteLast(int label, Node target) {
       assert numArcs > 0;
-      assert label == arcs[numArcs-1].label;
-      assert target == arcs[numArcs-1].target;
+      assert label == arcs[numArcs - 1].label;
+      assert target == arcs[numArcs - 1].target;
       numArcs--;
     }
 
+    // 修改最后一条弧的output
     public void setLastOutput(int labelToMatch, T newOutput) {
       assert owner.validOutput(newOutput);
       assert numArcs > 0;
-      final Arc<T> arc = arcs[numArcs-1];
+      final Arc<T> arc = arcs[numArcs - 1];
       assert arc.label == labelToMatch;
       arc.output = newOutput;
     }
 
     // pushes an output prefix forward onto all arcs
+    // 把一个输出的前缀，给到当前的所有弧上
+    // 用在哪里呢，本来有3条弧，都是数字各不一样之类的， 现在新进来一个， 重新计算之后， 就需要改变当前节点所有弧的输出值，就用到这个方法了，一次性把所有弧的push进去，嘻嘻
     public void prependOutput(T outputPrefix) {
       assert owner.validOutput(outputPrefix);
 
-      for(int arcIdx=0;arcIdx<numArcs;arcIdx++) {
+      for (int arcIdx = 0; arcIdx < numArcs; arcIdx++) {
         arcs[arcIdx].output = owner.fst.outputs.add(outputPrefix, arcs[arcIdx].output);
         assert owner.validOutput(arcs[arcIdx].output);
       }
@@ -702,7 +797,9 @@ public class Builder<T> {
     private byte[] bytes = new byte[11];
     private final ByteArrayDataOutput bado = new ByteArrayDataOutput(bytes);
 
-    /** Ensures the capacity of the internal byte array. Enlarges it if needed. */
+    /**
+     * Ensures the capacity of the internal byte array. Enlarges it if needed.
+     */
     FixedLengthArcsBuffer ensureCapacity(int capacity) {
       if (bytes.length < capacity) {
         bytes = new byte[ArrayUtil.oversize(capacity, Byte.BYTES)];
@@ -734,7 +831,9 @@ public class Builder<T> {
       return bado.getPosition();
     }
 
-    /** Gets the internal byte array. */
+    /**
+     * Gets the internal byte array.
+     */
     byte[] getBytes() {
       return bytes;
     }

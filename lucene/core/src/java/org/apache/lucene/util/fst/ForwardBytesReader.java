@@ -20,6 +20,7 @@ package org.apache.lucene.util.fst;
 // TODO: can we use just ByteArrayDataInput...?  need to
 // add a .skipBytes to DataInput.. hmm and .setPosition
 
+// 字节数组的一个简单的前向读取者
 /** Reads from a single byte[]. */
 final class ForwardBytesReader extends FST.BytesReader {
   private final byte[] bytes;
